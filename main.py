@@ -119,6 +119,7 @@ class ChessApp:
         self.depth = 3
         self.probabilities = [0.5]  # Start with equal probability for White
         self.piece_images = {}
+        self.drag_data = {"piece": None, "start_square": None}
 
         # Load piece images
         for key, value in PIECE_ICONS.items():
@@ -149,14 +150,12 @@ class ChessApp:
         self.moves_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Info and input
-        self.info_label = tk.Label(root, text="Welcome to BattleMind Chess Showdown!", font=("Helvetica", 14))
+        self.info_label = tk.Label(root, text="Drag and drop pieces to make your move!", font=("Helvetica", 14))
         self.info_label.pack()
 
-        self.move_entry = tk.Entry(root)
-        self.move_entry.pack()
-
-        self.move_button = tk.Button(root, text="Submit Move", command=self.handle_human_move)
-        self.move_button.pack()
+        self.canvas.bind("<Button-1>", self.on_piece_click)
+        self.canvas.bind("<B1-Motion>", self.on_piece_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_piece_drop)
 
     def update_board(self):
         self.canvas.delete("all")
@@ -170,7 +169,45 @@ class ChessApp:
 
                 piece = self.board.piece_at(chess.square(col, 7 - row))
                 if piece:
-                    self.canvas.create_image(x0 + square_size // 2, y0 + square_size // 2, image=self.piece_images[piece.symbol()])
+                    self.canvas.create_image(x0 + square_size // 2, y0 + square_size // 2, image=self.piece_images[piece.symbol()], tags=("piece", chess.square_name(chess.square(col, 7 - row))))
+
+    def on_piece_click(self, event):
+        square_size = 75
+        col = event.x // square_size
+        row = event.y // square_size
+        square = chess.square(col, 7 - row)
+        piece = self.board.piece_at(square)
+
+        if piece and piece.color == self.board.turn:
+            self.drag_data["piece"] = self.piece_images[piece.symbol()]
+            self.drag_data["start_square"] = square
+
+    def on_piece_drag(self, event):
+        if self.drag_data["piece"]:
+            self.canvas.delete("dragged_piece")
+            self.canvas.create_image(event.x, event.y, image=self.drag_data["piece"], tags="dragged_piece")
+
+    def on_piece_drop(self, event):
+        square_size = 75
+        col = event.x // square_size
+        row = event.y // square_size
+        end_square = chess.square(col, 7 - row)
+
+        start_square = self.drag_data.get("start_square")
+        if start_square is not None:
+            move = chess.Move(start_square, end_square)
+            if move in self.board.legal_moves:
+                self.board.push(move)
+                self.record_move(self.board.peek().uci())
+                self.update_board()
+                self.update_probability_graph()
+                self.handle_ai_move()
+            else:
+                self.info_label.config(text="Illegal move! Try again.")
+
+        self.drag_data["piece"] = None
+        self.drag_data["start_square"] = None
+        self.canvas.delete("dragged_piece")
 
     def update_probability_graph(self):
         for widget in self.graph_canvas.winfo_children():
@@ -180,22 +217,6 @@ class ChessApp:
     def record_move(self, move):
         self.moves_listbox.insert(tk.END, move)
 
-    def handle_human_move(self):
-        move_text = self.move_entry.get()
-        try:
-            move = chess.Move.from_uci(move_text)
-            if move in self.board.legal_moves:
-                self.board.push(move)
-                self.probabilities.append(evaluate_board(self.board) / 39.0)  # Normalize score
-                self.record_move(f"White: {move}")
-                self.update_board()
-                self.update_probability_graph()
-                self.handle_ai_move()
-            else:
-                self.info_label.config(text="Illegal move! Try again.")
-        except ValueError:
-            self.info_label.config(text="Invalid move format. Use UCI (e.g., e2e4).")
-
     def handle_ai_move(self):
         self.info_label.config(text="AI is thinking...")
         start_time = time.time()
@@ -203,7 +224,7 @@ class ChessApp:
         end_time = time.time()
         self.board.push(ai_move)
         self.probabilities.append(evaluate_board(self.board) / 39.0)  # Normalize score
-        self.record_move(f"Black: {ai_move}")
+        self.record_move(ai_move.uci())
         self.update_board()
         self.update_probability_graph()
         self.info_label.config(text=f"AI moved: {ai_move}. Time: {end_time - start_time:.2f}s")
