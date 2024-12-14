@@ -1,8 +1,11 @@
 # chess_app/board.py
 import tkinter as tk
 from chess import SQUARES, square_rank, square_file, Move
-from chess_app.utils import Timer
+from chess_app.utils import Timer, SoundEffects
 import chess
+import time
+
+
 class ChessBoard(tk.Canvas):
     def __init__(self, parent, app, **kwargs):
         super().__init__(parent, bg="#FFFFFF", highlightthickness=0, **kwargs)
@@ -125,8 +128,20 @@ class ChessBoard(tk.Canvas):
             dropped_square = self.square_from_coords(col, row)
 
             move = Move(self.app.selected_square, dropped_square)
-            if move in self.app.legal_moves:
-                self.app.handle_move(move)
+            promotion = None
+
+            # Handle promotion if pawn reaches the last rank
+            if self.board.piece_at(self.app.selected_square).piece_type == chess.PAWN:
+                if (self.board.turn and square_rank(dropped_square) == 7) or \
+                   (not self.board.turn and square_rank(dropped_square) == 0):
+                    promotion = self.app.show_promotion_dialog()
+
+            if promotion:
+                # Wait for promotion choice
+                self.app.pending_promotion = (move, promotion)
+            else:
+                if move in self.app.legal_moves:
+                    self.app.handle_move(move)
 
             # Reset state
             self.app.selected_square = None
@@ -141,21 +156,55 @@ class ChessBoard(tk.Canvas):
 
     def square_from_coords(self, col, row):
         return chess.square(col, 7 - row)
+
     def show_promotion_dialog(self):
         dialog = tk.Toplevel(self)
         dialog.title("Promote Pawn")
         dialog.geometry("200x50")
-        
+        dialog.transient(self)
+        dialog.grab_set()
+
         pieces = ['Q', 'R', 'B', 'N']
+        selected_piece = tk.StringVar(value='Q')
+
+        def choose_piece(piece):
+            selected_piece.set(piece)
+            dialog.destroy()
+
         for i, piece in enumerate(pieces):
             btn = tk.Button(
-                dialog, 
+                dialog,
                 text=piece,
-                command=lambda p=piece: self.handle_promotion(p)
+                command=lambda p=piece: choose_piece(p)
             )
             btn.pack(side=tk.LEFT, padx=5)
-        
-        return dialog
+
+        self.wait_window(dialog)
+        return selected_piece.get()
+
+    def animate_move(self, from_square, to_square, piece_image):
+        from_row, from_col = 7 - square_rank(from_square), square_file(from_square)
+        to_row, to_col = 7 - square_rank(to_square), square_file(to_square)
+        start_x = from_col * self.square_size + self.square_size // 2
+        start_y = from_row * self.square_size + self.square_size // 2
+        end_x = to_col * self.square_size + self.square_size // 2
+        end_y = to_row * self.square_size + self.square_size // 2
+
+        steps = 20
+        dx = (end_x - start_x) / steps
+        dy = (end_y - start_y) / steps
+
+        current_x, current_y = start_x, start_y
+        self.create_image(current_x, current_y, image=piece_image, tags="anim_piece")
+        for _ in range(steps):
+            current_x += dx
+            current_y += dy
+            self.coords("anim_piece", current_x, current_y)
+            self.update()
+            time.sleep(0.02)  # Adjust speed as needed
+
+        self.delete("anim_piece")
+
     def highlight_legal_moves(self):
         self.delete("highlight")
         for move in self.app.legal_moves:

@@ -1,109 +1,144 @@
 # chess_app/utils.py
-from stockfish import Stockfish
-import tkinter as tk
+import chess.engine
+import chess.pgn
+import pygame
+import time
+import os
 from tkinter import messagebox
-import os
-# chess_app/utils.py
-import os
-from playsound import playsound
+
+
+class AIPlayer:
+    def __init__(self, engine_path="/opt/homebrew/bin/stockfish", depth=2):
+        self.engine_path = engine_path
+        self.depth = depth
+        if not os.path.exists(engine_path):
+            messagebox.showerror("Error", f"Stockfish engine not found at {engine_path}.")
+            raise FileNotFoundError(f"Stockfish engine not found at {engine_path}.")
+        self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+
+    def get_best_move(self, board):
+        try:
+            result = self.engine.play(board, chess.engine.Limit(depth=self.depth))
+            return result.move
+        except Exception as e:
+            print(f"Error getting best move: {e}")
+            return None
+
+    def set_depth(self, depth):
+        self.depth = depth
+
+    def close(self):
+        self.engine.quit()
+
+
+class GameAnalyzer:
+    def __init__(self, engine_path="/opt/homebrew/bin/stockfish"):
+        self.engine_path = engine_path
+        if not os.path.exists(engine_path):
+            messagebox.showerror("Error", f"Stockfish engine not found at {engine_path}.")
+            raise FileNotFoundError(f"Stockfish engine not found at {engine_path}.")
+        self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+
+    def analyze_game(self, board):
+        game = chess.pgn.Game.from_board(board)
+        analysis = []
+        board = game.board()
+        for move in game.mainline_moves():
+            board.push(move)
+            try:
+                result = self.engine.analyse(board, chess.engine.Limit(depth=15))
+                evaluation = result["score"].relative.score(mate_score=10000)
+                if evaluation is None:
+                    evaluation = "MATE"
+                analysis.append((move, evaluation))
+            except Exception as e:
+                print(f"Error during analysis: {e}")
+                analysis.append((move, "Error"))
+        return analysis
+
+    def close(self):
+        self.engine.quit()
+
+
+class SaveLoad:
+    @staticmethod
+    def save_game(board, filename="saved_game.pgn"):
+        game = chess.pgn.Game.from_board(board)
+        with open(filename, "w") as f:
+            f.write(str(game))
+
+    @staticmethod
+    def load_game(filename="saved_game.pgn"):
+        with open(filename) as f:
+            game = chess.pgn.read_game(f)
+            board = game.board()
+            for move in game.mainline_moves():
+                board.push(move)
+            return board
+
 
 class SoundEffects:
-    @staticmethod
-    def get_asset_path(filename):
-        # Get the directory of the current script
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level to project root and then into assets
-        return os.path.join(os.path.dirname(current_dir), "assets", filename)
+    def __init__(self):
+        pygame.mixer.init()
+        assets_path = "./assets"
+        self.move_sound = self.load_sound(f"{assets_path}/move.mp3")
+        self.capture_sound = self.load_sound(f"{assets_path}/capture.mp3")
 
-    @staticmethod
-    def play_move():
-        try:
-            sound_path = SoundEffects.get_asset_path("move.mp3")
-            playsound(sound_path, block=False)
-        except Exception as e:
-            print(f"Error playing move sound: {e}")
-            
-    @staticmethod
-    def play_capture():
-        try:
-            sound_path = SoundEffects.get_asset_path("capture.mp3")
-            playsound(sound_path, block=False)
-        except Exception as e:
-            print(f"Error playing capture sound: {e}")
+    def load_sound(self, filepath):
+        if os.path.exists(filepath):
+            return pygame.mixer.Sound(filepath)
+        else:
+            print(f"Sound file {filepath} not found.")
+            return None
+
+    def play_move(self):
+        if self.move_sound:
+            self.move_sound.play()
+
+    def play_capture(self):
+        if self.capture_sound:
+            self.capture_sound.play()
+
+
 class Timer:
-    def __init__(self, initial_time=300, increment=2):
-        self.white_time = initial_time
-        self.black_time = initial_time
-        self.increment = increment
-        self.is_white_turn = True
+    @staticmethod
     def format_time(white_time, black_time):
         white_minutes, white_seconds = divmod(white_time, 60)
         black_minutes, black_seconds = divmod(black_time, 60)
-        return f"Time: {white_minutes:02}:{white_seconds:02} - {black_minutes:02}:{black_seconds:02}"
+        return f"White: {white_minutes:02}:{white_seconds:02} - Black: {black_minutes:02}:{black_seconds:02}"
 
-    def switch_turn(self):
-        if self.is_white_turn:
-            self.white_time += self.increment
-        else:
-            self.black_time += self.increment
-        self.is_white_turn = not self.is_white_turn
-    def set_timer_mode(self, mode):
-        if mode == "bullet":
-            self.timer = Timer(initial_time=60, increment=0)
-        elif mode == "blitz":
-            self.timer = Timer(initial_time=180, increment=2)
-        elif mode == "rapid":
-            self.timer = Timer(initial_time=600, increment=5)
-        self.update_timer()
-class SaveLoad:
-    @staticmethod
-    def save_game(board, filename="saved_game.txt"):
-        with open(filename, "w") as f:
-            f.write(board.fen())
-
-    @staticmethod
-    def load_game(filename="saved_game.txt"):
-        if not os.path.exists(filename):
-            raise FileNotFoundError("No saved game found.")
-        with open(filename, "r") as f:
-            fen = f.read().strip()
-            return fen
 
 class Theme:
-    @staticmethod
-    def toggle_theme(app):
-        if app.root.cget("bg") == "#F5F5F7":
-            app.root.configure(bg="#333333")
-            app.side_panel_frame.configure(bg="#444444")
-            app.board_frame.configure(bg="#444444")
-            app.status_bar.configure(bg="#444444", fg="#FFFFFF")
-            app.status_label.configure(bg="#444444", fg="#FFFFFF")
-            app.timer_label.configure(bg="#444444", fg="#FFFFFF")
-            app.captured_label_white.configure(bg="#444444", fg="#FFFFFF")
-            app.captured_label_black.configure(bg="#444444", fg="#FFFFFF")
+    def __init__(self, app):
+        self.app = app
+        self.current_theme = 'light'
+
+    def toggle_theme(self):
+        if self.current_theme == 'light':
+            self.apply_dark_theme()
+            self.current_theme = 'dark'
         else:
-            app.root.configure(bg="#F5F5F7")
-            app.side_panel_frame.configure(bg="#FFFFFF")
-            app.board_frame.configure(bg="#D6D6D6")
-            app.status_bar.configure(bg="#F5F5F7", fg="#333333")
-            app.status_label.configure(bg="#FFFFFF", fg="#000000")
-            app.timer_label.configure(bg="#FFFFFF", fg="#000000")
-            app.captured_label_white.configure(bg="#FFFFFF", fg="#000000")
-            app.captured_label_black.configure(bg="#FFFFFF", fg="#000000")
+            self.apply_light_theme()
+            self.current_theme = 'light'
 
-class AIPlayer:
-    def __init__(self, stockfish_path="stockfish"):
-        self.stockfish = Stockfish(stockfish_path)
-        self.stockfish.set_skill_level(1)  # Default skill level
+    def apply_light_theme(self):
+        self.app.root.configure(bg="#F5F5F7")
+        self.app.side_panel_frame.configure(bg="#FFFFFF")
+        self.app.status_bar.configure(bg="#F5F5F7", fg="#333333")
+        self.app.timer_label.configure(bg="#FFFFFF", fg="#000000")
+        self.app.status_label.configure(bg="#FFFFFF", fg="#000000")
+        self.app.captured_label_white.configure(bg="#FFFFFF", fg="#000000")
+        self.app.captured_label_black.configure(bg="#FFFFFF", fg="#000000")
+        self.app.move_list.configure(bg="#F0F0F0", fg="#333333")
+        # Update other widgets as needed
 
-    def set_difficulty(self, skill_level):
-        """Set the Stockfish difficulty level."""
-        self.stockfish.set_skill_level(skill_level)
-
-    def set_position(self, fen):
-        """Set the position on the board using FEN."""
-        self.stockfish.set_fen_position(fen)
-
-    def get_best_move(self):
-        """Get the best move calculated by Stockfish."""
-        return self.stockfish.get_best_move()
+    def apply_dark_theme(self):
+        self.app.root.configure(bg="#2E2E2E")
+        self.app.side_panel_frame.configure(bg="#3C3C3C")
+        self.app.status_bar.configure(bg="#2E2E2E", fg="#FFFFFF")
+        self.app.timer_label.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.status_label.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.captured_label_white.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.captured_label_black.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.move_list.configure(bg="#4F4F4F", fg="#FFFFFF")
+        # Update other widgets as needed
