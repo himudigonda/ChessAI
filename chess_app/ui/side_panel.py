@@ -14,7 +14,7 @@ class SidePanel(tk.Frame):
         :param app: The main ChessApp instance.
         :param kwargs: Additional keyword arguments for Frame.
         """
-        super().__init__(parent, bg=Styles.CURRENT_THEME["background"], **kwargs)
+        super().__init__(parent, bg="#F5F5F5", **kwargs)  # Removed style reference
         self.app = app
         self.captured_white = []
         self.captured_black = []
@@ -25,51 +25,51 @@ class SidePanel(tk.Frame):
         Creates and places all widgets in the side panel.
         """
         # Title
-        title = tk.Label(self, text="Game Info", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 16, "bold"))
+        title = tk.Label(self, text="Game Info", bg="#F5F5F5", fg="#000000", font=("Helvetica", 16, "bold")) # Removed Style Reference
         title.pack(pady=10)
 
         # Timer Display
-        self.timer_label = tk.Label(self, text="White: 05:00 - Black: 05:00", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 14))
+        self.timer_label = tk.Label(self, text="White: 05:00 - Black: 05:00", bg="#F5F5F5", fg="#000000", font=("Helvetica", 14)) # Removed Style Reference
         self.timer_label.pack(pady=5)
 
         # Status Message
-        self.status_label = tk.Label(self, text="Welcome to Chess AI!", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["status_info"], font=("Helvetica", 12))
+        self.status_label = tk.Label(self, text="Welcome to Chess AI!", bg="#F5F5F5", fg="#5bc0de", font=("Helvetica", 12)) # Removed Style Reference
         self.status_label.pack(pady=5)
 
         # Captured Pieces
-        captured_group = tk.LabelFrame(self, text="Captured Pieces", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        captured_group = tk.LabelFrame(self, text="Captured Pieces", bg="#F5F5F5", fg="#000000") # Removed Style Reference
         captured_group.pack(fill="x", padx=10, pady=5)
 
-        lbl_white = tk.Label(captured_group, text="White:", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        lbl_white = tk.Label(captured_group, text="White:", bg="#F5F5F5", fg="#000000") # Removed Style Reference
         lbl_white.pack(anchor="w", padx=5)
 
-        self.captured_white_label = tk.Label(captured_group, text="", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.captured_white_label = tk.Label(captured_group, text="", bg="#F5F5F5", fg="#000000", font=("Helvetica", 12)) # Removed Style Reference
         self.captured_white_label.pack(anchor="w", padx=20)
 
-        lbl_black = tk.Label(captured_group, text="Black:", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        lbl_black = tk.Label(captured_group, text="Black:", bg="#F5F5F5", fg="#000000") # Removed Style Reference
         lbl_black.pack(anchor="w", padx=5)
 
-        self.captured_black_label = tk.Label(captured_group, text="", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.captured_black_label = tk.Label(captured_group, text="", bg="#F5F5F5", fg="#000000", font=("Helvetica", 12)) # Removed Style Reference
         self.captured_black_label.pack(anchor="w", padx=20)
 
         # Move List
-        move_list_group = tk.LabelFrame(self, text="Move List", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        move_list_group = tk.LabelFrame(self, text="Move List", bg="#F5F5F5", fg="#000000") # Removed Style Reference
         move_list_group.pack(fill="both", expand=True, padx=10, pady=5)
 
-        self.move_list = tk.Text(move_list_group, height=15, state="disabled", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.move_list = tk.Text(move_list_group, height=15, state="disabled", bg="#F5F5F5", fg="#000000", font=("Helvetica", 12)) # Removed Style Reference
         self.move_list.pack(fill="both", expand=True, padx=5, pady=5)
 
     def update_timer(self, timer_text):
         self.timer_label.config(text=timer_text)
 
     def update_status(self, message, color="green"):
-        self.status_label.config(text=message, fg=Styles.CURRENT_THEME["status_info"])
+        self.status_label.config(text=message, fg="#5bc0de")
         if color == "green":
-            self.status_label.config(fg=Styles.CURRENT_THEME["status_success"])
+            self.status_label.config(fg="#00a651")
         elif color == "red":
-            self.status_label.config(fg=Styles.CURRENT_THEME["status_error"])
+            self.status_label.config(fg="#d9534f")
         elif color == "blue":
-            self.status_label.config(fg=Styles.CURRENT_THEME["status_info"])
+            self.status_label.config(fg="#5bc0de")
 
     def update_move_list(self, move_san):
         self.move_list.config(state="normal")

@@ -1,5 +1,5 @@
 # main.py
-
+import torch
 from chess_app.utils import SoundEffects
 from chess_app.ui.main_window import MainWindow
 from chess_app.utils import Timer, SaveLoad, AIPlayer
@@ -9,11 +9,13 @@ from chess_app.utils import Logger, GameSaver, EloRating
 import chess
 from threading import Thread
 from chess_app.config import Config
+
 # from tkinter_ui import MainWindow  # type: ignore # Remove if exists; ensure no old UI references
 import tkinter as tk
 from tkinter import messagebox
 from chess_app.ui.utils import show_message
-from chess_app.ui.styles import Styles
+
+# from chess_app.ui.styles import Styles  # Removed style import
 
 
 class ChessApp:
@@ -38,13 +40,33 @@ class ChessApp:
         self.game_saver = GameSaver()
 
         # Initialize Elo Rating
-        self.elo_rating = EloRating(initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR)
+        self.elo_rating = EloRating(
+            initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR
+        )
 
         # Initialize AIPlayer to None (load later in a thread)
         self.ai_player = None
 
         # Initialize Tkinter UI
         self.window = MainWindow(self)
+
+        # Load AI model
+        self.load_ai_model()
+
+    def load_ai_model(self):
+        """
+        Loads the AI model.
+        """
+        try:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.ai_player = AIPlayer(
+                model_path=Config.MODEL_PATH, device='cpu', side=chess.WHITE
+            )
+            self.model_loaded = True
+            self.update_status("AI model loaded successfully.", color="green")
+        except Exception as e:
+            self.update_status(f"Failed to load AI model: {e}", color="red")
+            self.logger.error(f"Failed to load AI model: {e}")
 
     def run(self):
         """
@@ -59,7 +81,7 @@ class ChessApp:
         try:
             # Validate if the move is legal
             if move not in self.board.legal_moves:
-                self.update_status("Illegal move attempted.", color=Styles.CURRENT_THEME["status_error"])
+                self.update_status("Illegal move attempted.", color="red")
                 return
 
             # Push the move to the board
@@ -83,7 +105,9 @@ class ChessApp:
                         self.captured_pieces["black"].append(symbol.upper())
                     else:
                         self.captured_pieces["white"].append(symbol.lower())
-                    self.window.side_panel.update_captured_pieces(self.captured_pieces["white"], self.captured_pieces["black"])
+                    self.window.side_panel.update_captured_pieces(
+                        self.captured_pieces["white"], self.captured_pieces["black"]
+                    )
 
             # Play sound if enabled
             if self.sound_enabled:
@@ -97,7 +121,7 @@ class ChessApp:
 
         except Exception as e:
             # Log and display the error
-            self.update_status(f"Error handling move: {str(e)}", color=Styles.CURRENT_THEME["status_error"])
+            self.update_status(f"Error handling move: {str(e)}", color="red")
             self.logger.error(f"Error in handle_move: {str(e)}")
 
     def ai_make_move(self):
@@ -139,7 +163,9 @@ class ChessApp:
         self.game_saver.save_game(self.board)
 
         # Log the outcome
-        self.logger.info(f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}")
+        self.logger.info(
+            f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}"
+        )
 
     def save_game(self):
         """
@@ -183,7 +209,9 @@ class ChessApp:
         self.game_saver.save_game(self.board)
 
         # Log the outcome
-        self.logger.info(f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}")
+        self.logger.info(
+            f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}"
+        )
 
     def offer_draw(self):
         """
@@ -244,7 +272,9 @@ class ChessApp:
         self.black_time = 300
         self.captured_pieces = {"white": [], "black": []}
         self.redo_stack = []
-        self.window.side_panel.update_captured_pieces(self.captured_pieces["white"], self.captured_pieces["black"])
+        self.window.side_panel.update_captured_pieces(
+            self.captured_pieces["white"], self.captured_pieces["black"]
+        )
         self.window.side_panel.move_list.config(state="normal")
         self.window.side_panel.move_list.delete("1.0", tk.END)
         self.window.side_panel.move_list.config(state="disabled")
@@ -272,7 +302,9 @@ class ChessApp:
         :param enabled: Boolean indicating if sound is enabled.
         """
         self.sound_enabled = enabled
-        self.update_status(f"Sound Effects {'Enabled' if enabled else 'Disabled'}.", color="green")
+        self.update_status(
+            f"Sound Effects {'Enabled' if enabled else 'Disabled'}.", color="green"
+        )
 
     def show_hint(self):
         """
@@ -288,43 +320,49 @@ class ChessApp:
                 messagebox.showwarning("Hint", "No hint available.")
                 self.update_status("No hint available.", color="red")
         else:
-            messagebox.showwarning("Hint", "AI model not loaded.")
-            self.update_status("AI model not loaded.", color="red")
+            messagebox.showwarning("Hint", "1AI model not loaded.")
+            self.update_status("2AI model not loaded.", color="red")
 
     def analyze_position(self):
         """
         Analyzes the current position.
         """
         # Placeholder for position analysis
-        messagebox.showinfo("Analyze Position", "Position analysis feature is under development.")
-        self.update_status("Position analysis feature is under development.", color="blue")
+        messagebox.showinfo(
+            "Analyze Position", "Position analysis feature is under development."
+        )
+        self.update_status(
+            "Position analysis feature is under development.", color="blue"
+        )
 
     def analyze_game(self):
         """
         Analyzes the completed game.
         """
         # Placeholder for game analysis
-        messagebox.showinfo("Analyze Game", "Game analysis feature is under development.")
+        messagebox.showinfo(
+            "Analyze Game", "Game analysis feature is under development."
+        )
         self.update_status("Game analysis feature is under development.", color="blue")
 
     def toggle_theme(self):
         """
         Toggles between light and dark themes.
         """
-        Styles.toggle_theme()
-        self.apply_theme()
-        self.update_status("Theme toggled.", color="green")
+        # Styles.toggle_theme()  # Removed style reference
+        # self.apply_theme() # Removed style reference
+        self.update_status("Theme toggled.", color="green")  # Removed style reference
 
     def apply_theme(self):
         """
         Applies the current theme to all UI components.
         """
         # Update background colors
-        self.configure(bg=Styles.CURRENT_THEME["background"])
-        self.window.chessboard.configure(bg=Styles.CURRENT_THEME["background"])
-        self.window.control_panel.configure(bg=Styles.CURRENT_THEME["background"])
-        self.window.side_panel.configure(bg=Styles.CURRENT_THEME["background"])
-        self.window.status_bar.configure(bg=Styles.CURRENT_THEME["background"])
+        self.configure(bg="#F5F5F5")  # Removed style reference
+        self.window.chessboard.configure(bg="#F5F5F5")  # Removed style reference
+        self.window.control_panel.configure(bg="#F5F5F5")  # Removed style reference
+        self.window.side_panel.configure(bg="#F5F5F5")  # Removed style reference
+        self.window.status_bar.configure(bg="#F5F5F5")  # Removed style reference
 
         # Update chessboard squares and pieces
         self.window.chessboard.draw_board()
@@ -335,16 +373,28 @@ class ChessApp:
         # Update control panel buttons
         for child in self.window.control_panel.winfo_children():
             if isinstance(child, tk.Button):
-                child.configure(bg=Styles.CURRENT_THEME["button_bg"], fg=Styles.CURRENT_THEME["button_fg"])
+                child.configure(bg="#E0E0E0", fg="#000000")  # Removed style reference
             elif isinstance(child, ttk.Combobox):
-                child.configure(background=Styles.CURRENT_THEME["background"], foreground=Styles.CURRENT_THEME["foreground"])
+                child.configure(
+                    background="#F5F5F5", foreground="#000000"
+                )  # Removed style reference
 
         # Update side panel labels
-        self.window.side_panel.timer_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.window.side_panel.status_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.window.side_panel.captured_white_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.window.side_panel.captured_black_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.window.side_panel.move_list.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.window.side_panel.timer_label.configure(
+            bg="#F5F5F5", fg="#000000"
+        )  # Removed style reference
+        self.window.side_panel.status_label.configure(
+            bg="#F5F5F5", fg="#000000"
+        )  # Removed style reference
+        self.window.side_panel.captured_white_label.configure(
+            bg="#F5F5F5", fg="#000000"
+        )  # Removed style reference
+        self.window.side_panel.captured_black_label.configure(
+            bg="#F5F5F5", fg="#000000"
+        )  # Removed style reference
+        self.window.side_panel.move_list.configure(
+            bg="#F5F5F5", fg="#000000"
+        )  # Removed style reference
 
     def play_against_stockfish(self):
         """
@@ -357,10 +407,25 @@ class ChessApp:
             return
 
         # Initialize Stockfish as opponent
-        self.opponent_engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
-        self.opponent_side = chess.BLACK if self.ai_player.side == chess.WHITE else chess.WHITE
+        try:
+            self.opponent_engine = chess.engine.SimpleEngine.popen_uci(
+                Config.ENGINE_PATH
+            )
+        except Exception as e:
+            self.update_status(f"Failed to load Stockfish engine: {e}", color="red")
+            messagebox.showerror("Error", f"Failed to load Stockfish engine: {e}")
+            return
+
+        self.opponent_side = (
+            chess.BLACK if self.ai_player.side == chess.WHITE else chess.WHITE
+        )
         self.update_status("Playing against Stockfish.", color="blue")
-        self.play_game_thread = Thread(target=self.play_game, args=(self.opponent_engine, self.opponent_side), daemon=True)
+        self.window.control_panel.update_player_labels("Chess AI", "Stockfish")
+        self.play_game_thread = Thread(
+            target=self.play_game,
+            args=(self.opponent_engine, self.opponent_side),
+            daemon=True,
+        )
         self.play_game_thread.start()
 
     def play_against_model(self):
@@ -369,14 +434,23 @@ class ChessApp:
         """
         # Implement AI vs Model logic
         if not self.ai_player:
-            self.update_status("AI model not loaded.", color="red")
-            messagebox.showerror("Error", "AI model not loaded.")
+            self.update_status("5AI model not loaded.", color="red")
+            messagebox.showerror("Error", "6AI model not loaded.")
             return
 
         # For playing against the model, instantiate another AIPlayer with the same model
-        self.opponent_ai = AIPlayer(model_path=self.ai_player.model_path, device=self.ai_player.device, side=chess.BLACK if self.ai_player.side == chess.WHITE else chess.WHITE)
+        self.opponent_ai = AIPlayer(
+            model_path=self.ai_player.model_path,
+            device=self.ai_player.device,
+            side=chess.BLACK if self.ai_player.side == chess.WHITE else chess.WHITE,
+        )
         self.update_status("Playing against the model.", color="blue")
-        self.play_game_thread = Thread(target=self.play_game_between_models, args=(self.opponent_ai,), daemon=True)
+        self.window.control_panel.update_player_labels(
+            "Chess AI (White)", "Chess AI (Black)"
+        )
+        self.play_game_thread = Thread(
+            target=self.play_game_between_models, args=(self.opponent_ai,), daemon=True
+        )
         self.play_game_thread.start()
 
     def watch_ai_vs_stockfish(self):
@@ -385,14 +459,17 @@ class ChessApp:
         """
         # Implement AI vs Stockfish auto-play logic
         if not self.ai_player:
-            self.update_status("AI model not loaded.", color="red")
-            messagebox.showerror("Error", "AI model not loaded.")
+            self.update_status("7AI model not loaded.", color="red")
+            messagebox.showerror("Error", "8AI model not loaded.")
             return
 
         # Initialize Stockfish as opponent
         self.opponent_engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
         self.update_status("Watching AI vs Stockfish.", color="blue")
-        self.watch_game_thread = Thread(target=self.watch_game, args=(self.opponent_engine,), daemon=True)
+        self.window.control_panel.update_player_labels("Chess AI", "Stockfish")
+        self.watch_game_thread = Thread(
+            target=self.watch_game, args=(self.opponent_engine,), daemon=True
+        )
         self.watch_game_thread.start()
 
     def play_game(self, opponent_engine, opponent_side):
@@ -407,7 +484,10 @@ class ChessApp:
             if game_board.turn == self.ai_player.side:
                 move = self.ai_player.get_best_move(game_board)
             else:
-                result = opponent_engine.play(game_board, chess.engine.Limit(depth=self.ai_player.difficulty_level))
+                result = opponent_engine.play(
+                    game_board,
+                    chess.engine.Limit(depth=self.ai_player.difficulty_level),
+                )
                 move = result.move
             game_board.push(move)
             self.update_ui_with_move(game_board, move)
@@ -446,7 +526,10 @@ class ChessApp:
             if game_board.turn == self.ai_player.side:
                 move = self.ai_player.get_best_move(game_board)
             else:
-                result = opponent_engine.play(game_board, chess.engine.Limit(depth=self.ai_player.difficulty_level))
+                result = opponent_engine.play(
+                    game_board,
+                    chess.engine.Limit(depth=self.ai_player.difficulty_level),
+                )
                 move = result.move
             game_board.push(move)
             self.update_ui_with_move(game_board, move)
@@ -480,7 +563,9 @@ class ChessApp:
                     self.captured_pieces["black"].append(symbol.upper())
                 else:
                     self.captured_pieces["white"].append(symbol.lower())
-                self.window.side_panel.update_captured_pieces(self.captured_pieces["white"], self.captured_pieces["black"])
+                self.window.side_panel.update_captured_pieces(
+                    self.captured_pieces["white"], self.captured_pieces["black"]
+                )
 
         if self.sound_enabled:
             self.play_sound(move)
@@ -509,7 +594,9 @@ class ChessApp:
         self.game_saver.save_game(board)
 
         # Log the outcome
-        self.logger.info(f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}")
+        self.logger.info(
+            f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}"
+        )
 
     def toggle_coordinates(self, show):
         """
@@ -518,7 +605,9 @@ class ChessApp:
         :param show: Boolean indicating whether to show coordinates.
         """
         self.window.chessboard.toggle_coordinates(show)
-        self.update_status(f"Coordinates {'shown' if show else 'hidden'}.", color="green")
+        self.update_status(
+            f"Coordinates {'shown' if show else 'hidden'}.", color="green"
+        )
 
     def update_status(self, message, color="green"):
         """
@@ -538,23 +627,26 @@ class ChessApp:
                 self.sound_effects.play_capture()
             else:
                 self.sound_effects.play_move()
-    def play_against_stockfish(self):
-        """
-        Sets up the AI to play against Stockfish.
-        """
-        self.play_against_stockfish()
 
-    def play_against_model(self):
-        """
-        Sets up the AI to play against the trained model.
-        """
-        self.play_against_model()
+    # Corrected functions
+    # Remove the recursion
+    # def play_against_stockfish(self):
+    #    """
+    #    Sets up the AI to play against Stockfish.
+    #    """
+    #    self.play_against_stockfish()
 
-    def watch_ai_vs_stockfish(self):
-        """
-        Watches the AI and Stockfish play against each other automatically.
-        """
-        self.watch_ai_vs_stockfish()
+    # def play_against_model(self):
+    #    """
+    #    Sets up the AI to play against the trained model.
+    #    """
+    #    self.play_against_model()
+
+    # def watch_ai_vs_stockfish(self):
+    #    """
+    #    Watches the AI and Stockfish play against each other automatically.
+    #    """
+    #    self.watch_ai_vs_stockfish()
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ from .chessboard_widget import ChessBoardWidget
 from .control_panel import ControlPanel
 from .side_panel import SidePanel
 from .status_bar import StatusBar
-from .styles import Styles
 
 
 class MainWindow(tk.Tk):
@@ -19,7 +18,7 @@ class MainWindow(tk.Tk):
         self.app = app
         self.title("Chess AI")
         self.geometry("1200x800")
-        self.configure(bg=Styles.CURRENT_THEME["background"])
+        self.configure(bg="#F5F5F5")  # Removed style reference
 
         # Create main frames
         self.create_widgets()
@@ -33,7 +32,7 @@ class MainWindow(tk.Tk):
         self.chessboard.pack(side="left", padx=10, pady=10)
 
         # Right Panel containing Control and Side Panels
-        right_panel = tk.Frame(self, bg=Styles.CURRENT_THEME["background"])
+        right_panel = tk.Frame(self, bg="#F5F5F5") # Removed Style Reference
         right_panel.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
         # Control Panel
@@ -50,16 +49,16 @@ class MainWindow(tk.Tk):
 
         # Link status bar to app
         self.app.status_bar = self.status_bar
-
+    
     def refresh_ui(self):
         """
         Refreshes the UI elements, e.g., after theme change.
         """
-        self.configure(bg=Styles.CURRENT_THEME["background"])
-        self.chessboard.configure(bg=Styles.CURRENT_THEME["background"])
-        self.control_panel.configure(bg=Styles.CURRENT_THEME["background"])
-        self.side_panel.configure(bg=Styles.CURRENT_THEME["background"])
-        self.status_bar.configure(bg=Styles.CURRENT_THEME["background"])
+        self.configure(bg="#F5F5F5")
+        self.chessboard.configure(bg="#F5F5F5")
+        self.control_panel.configure(bg="#F5F5F5")
+        self.side_panel.configure(bg="#F5F5F5")
+        self.status_bar.configure(bg="#F5F5F5")
 
         # Update chessboard squares and pieces
         self.chessboard.draw_board()
@@ -67,12 +66,12 @@ class MainWindow(tk.Tk):
 
         # Update control panel buttons
         for child in self.control_panel.winfo_children():
-            if isinstance(child, tk.Button):
-                child.configure(bg=Styles.CURRENT_THEME["button_bg"], fg=Styles.CURRENT_THEME["button_fg"])
+             if isinstance(child, tk.Button):
+                child.configure(bg="#E0E0E0", fg="#000000") # Removed Style Reference
 
         # Update side panel labels
-        self.side_panel.timer_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.side_panel.status_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.side_panel.captured_white_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.side_panel.captured_black_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
-        self.side_panel.move_list.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.side_panel.timer_label.configure(bg="#F5F5F5", fg="#000000") # Removed Style Reference
+        self.side_panel.status_label.configure(bg="#F5F5F5", fg="#000000") # Removed Style Reference
+        self.side_panel.captured_white_label.configure(bg="#F5F5F5", fg="#000000") # Removed Style Reference
+        self.side_panel.captured_black_label.configure(bg="#F5F5F5", fg="#000000") # Removed Style Reference
+        self.side_panel.move_list.configure(bg="#F5F5F5", fg="#000000") # Removed Style Reference

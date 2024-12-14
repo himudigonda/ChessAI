@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter import messagebox
-from .styles import Styles
+#from .styles import Styles
 
 
 def show_message(title, message, icon="info"):

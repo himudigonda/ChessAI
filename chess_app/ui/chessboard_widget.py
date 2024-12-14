@@ -10,7 +10,7 @@ from .styles import Styles
 
 class ChessBoardWidget(Canvas):
     def __init__(self, parent, app, **kwargs):
-        super().__init__(parent, bg=Styles.CURRENT_THEME["background"], **kwargs)
+        super().__init__(parent, bg="#F5F5F5", **kwargs)  # Removed style reference
         self.app = app
         self.board = app.board
         self.square_size = 60  # Will be updated dynamically
@@ -72,7 +72,7 @@ class ChessBoardWidget(Canvas):
         Draws the chessboard squares.
         """
         self.delete("square")
-        colors = [Styles.CURRENT_THEME["chessboard_light"], Styles.CURRENT_THEME["chessboard_dark"]]
+        colors = ["#f0d9b5", "#b58863"] # Removed Styles
         for row in range(8):
             for col in range(8):
                 x1 = col * self.square_size
@@ -84,7 +84,7 @@ class ChessBoardWidget(Canvas):
 
         # Highlight squares if any
         for square in self.highlight_squares:
-            self.highlight_square(square, Styles.CURRENT_THEME["highlight_color"])
+            self.highlight_square(square, "#0073e6") # Removed Style Reference
 
     def draw_pieces(self):
         """
@@ -112,13 +112,13 @@ class ChessBoardWidget(Canvas):
         for col in range(8):
             x = col * self.square_size + self.square_size / 2
             y = 8 * self.square_size
-            self.create_text(x, y + 10, text=chr(ord('A') + col), tags="coord", font=font, fill=Styles.CURRENT_THEME["foreground"])
+            self.create_text(x, y + 10, text=chr(ord('A') + col), tags="coord", font=font, fill="#000000")  # Removed Style reference
 
         # Ranks (1-8)
         for row in range(8):
             x = -10
             y = row * self.square_size + self.square_size / 2
-            self.create_text(x, y, text=str(row + 1), tags="coord", font=font, fill=Styles.CURRENT_THEME["foreground"])
+            self.create_text(x, y, text=str(row + 1), tags="coord", font=font, fill="#000000") # Removed Style reference
 
     def toggle_coordinates(self, show):
         """
@@ -194,7 +194,7 @@ class ChessBoardWidget(Canvas):
             if move in self.board.legal_moves:
                 self.app.handle_move(move)
             else:
-                self.app.status_bar.update_status("Illegal move.", color=Styles.CURRENT_THEME["status_error"])
+                self.app.status_bar.update_status("Illegal move.", color="#d9534f") # Removed Style reference
             self.dragging_piece = None
             self.drag_image = None
             self.selected_square = None
