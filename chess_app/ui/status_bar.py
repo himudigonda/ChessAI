@@ -1,7 +1,7 @@
 # chess_app/ui/status_bar.py
 
 import tkinter as tk
-#from .styles import Styles
+from chess_app.config import Config
 
 
 class StatusBar(tk.Frame):
@@ -12,15 +12,15 @@ class StatusBar(tk.Frame):
         :param parent: The parent Tkinter widget.
         :param kwargs: Additional keyword arguments for Frame.
         """
-        super().__init__(parent, bg="#F5F5F5", **kwargs) # Removed style reference
-        self.label = tk.Label(self, text="Ready", anchor="w", bg="#F5F5F5", fg="#000000", font=("Helvetica", 12)) # Removed style reference
+        super().__init__(parent, bg=Config.CURRENT_THEME["background"], **kwargs)  # Removed style reference
+        self.label = tk.Label(self, text="Ready", anchor="w", bg=Config.CURRENT_THEME["background"], fg=Config.CURRENT_THEME["foreground"], font=("Helvetica", 12))
         self.label.pack(fill="both", expand=True)
 
     def update_status(self, message, color="green"):
         self.label.config(text=message)
         if color == "green":
-            self.label.config(fg="#00a651")
+            self.label.config(fg=Config.CURRENT_THEME["status_success"])
         elif color == "red":
-            self.label.config(fg="#d9534f")
+            self.label.config(fg=Config.CURRENT_THEME["status_error"])
         elif color == "blue":
-            self.label.config(fg="#5bc0de")
+            self.label.config(fg=Config.CURRENT_THEME["status_info"])

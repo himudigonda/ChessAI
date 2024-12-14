@@ -5,12 +5,14 @@ from tkinter import Canvas
 import chess
 from PIL import Image, ImageTk
 import os
-from .styles import Styles
+from chess_app.config import Config
 
 
 class ChessBoardWidget(Canvas):
     def __init__(self, parent, app, **kwargs):
-        super().__init__(parent, bg="#F5F5F5", **kwargs)  # Removed style reference
+        super().__init__(
+            parent, bg=Config.CURRENT_THEME["background"], **kwargs
+        )  # Removed style reference
         self.app = app
         self.board = app.board
         self.square_size = 60  # Will be updated dynamically
@@ -45,8 +47,12 @@ class ChessBoardWidget(Canvas):
         for piece, filename in piece_filenames.items():
             path = os.path.join(assets_path, filename)
             try:
-                image = Image.open(path).convert("RGBA")  # Ensure image has alpha channel
-                image = image.resize((self.square_size - 10, self.square_size - 10), Image.LANCZOS)
+                image = Image.open(path).convert(
+                    "RGBA"
+                )  # Ensure image has alpha channel
+                image = image.resize(
+                    (self.square_size - 10, self.square_size - 10), Image.LANCZOS
+                )
                 # Create a white background image
                 background = Image.new("RGBA", image.size, (255, 255, 255, 0))
                 combined = Image.alpha_composite(background, image)
@@ -72,7 +78,10 @@ class ChessBoardWidget(Canvas):
         Draws the chessboard squares.
         """
         self.delete("square")
-        colors = ["#f0d9b5", "#b58863"] # Removed Styles
+        colors = [
+            Config.CURRENT_THEME["chessboard_light"],
+            Config.CURRENT_THEME["chessboard_dark"],
+        ]
         for row in range(8):
             for col in range(8):
                 x1 = col * self.square_size
@@ -80,11 +89,13 @@ class ChessBoardWidget(Canvas):
                 x2 = x1 + self.square_size
                 y2 = y1 + self.square_size
                 color = colors[(row + col) % 2]
-                self.create_rectangle(x1, y1, x2, y2, fill=color, outline=color, tags="square")
+                self.create_rectangle(
+                    x1, y1, x2, y2, fill=color, outline=color, tags="square"
+                )
 
         # Highlight squares if any
         for square in self.highlight_squares:
-            self.highlight_square(square, "#0073e6") # Removed Style Reference
+            self.highlight_square(square, Config.CURRENT_THEME["highlight_color"])
 
     def draw_pieces(self):
         """
@@ -100,7 +111,12 @@ class ChessBoardWidget(Canvas):
                 y = row * self.square_size
                 image = self.images.get(piece.symbol())
                 if image:
-                    self.create_image(x + self.square_size//2, y + self.square_size//2, image=image, tags="piece")
+                    self.create_image(
+                        x + self.square_size // 2,
+                        y + self.square_size // 2,
+                        image=image,
+                        tags="piece",
+                    )
 
     def draw_coordinates(self):
         """
@@ -112,13 +128,27 @@ class ChessBoardWidget(Canvas):
         for col in range(8):
             x = col * self.square_size + self.square_size / 2
             y = 8 * self.square_size
-            self.create_text(x, y + 10, text=chr(ord('A') + col), tags="coord", font=font, fill="#000000")  # Removed Style reference
+            self.create_text(
+                x,
+                y + 10,
+                text=chr(ord("A") + col),
+                tags="coord",
+                font=font,
+                fill=Config.CURRENT_THEME["foreground"],
+            )
 
         # Ranks (1-8)
         for row in range(8):
             x = -10
             y = row * self.square_size + self.square_size / 2
-            self.create_text(x, y, text=str(row + 1), tags="coord", font=font, fill="#000000") # Removed Style reference
+            self.create_text(
+                x,
+                y,
+                text=str(row + 1),
+                tags="coord",
+                font=font,
+                fill=Config.CURRENT_THEME["foreground"],
+            )
 
     def toggle_coordinates(self, show):
         """
@@ -160,7 +190,11 @@ class ChessBoardWidget(Canvas):
         if piece and piece.color == self.board.turn:
             self.selected_square = square
             self.drag_start = (event.x, event.y)
-            self.highlight_squares = [move.to_square for move in self.board.legal_moves if move.from_square == square]
+            self.highlight_squares = [
+                move.to_square
+                for move in self.board.legal_moves
+                if move.from_square == square
+            ]
             self.draw_board()
             self.draw_pieces()
 
@@ -170,7 +204,7 @@ class ChessBoardWidget(Canvas):
 
         :param event: The Tkinter event.
         """
-        if hasattr(self, 'selected_square') and self.selected_square is not None:
+        if hasattr(self, "selected_square") and self.selected_square is not None:
             if not self.dragging_piece:
                 piece = self.board.piece_at(self.selected_square)
                 if piece:
@@ -180,26 +214,25 @@ class ChessBoardWidget(Canvas):
                 self.delete("drag")
                 self.create_image(event.x, event.y, image=self.drag_image, tags="drag")
 
+
     def on_drop(self, event):
         """
         Handles the drop event to execute a move.
-
-        :param event: The Tkinter event.
         """
-        if hasattr(self, 'selected_square') and self.selected_square is not None:
+        if self.selected_square is not None:
             col = event.x // self.square_size
             row = 7 - (event.y // self.square_size)
             to_square = chess.square(col, row)
             move = chess.Move(self.selected_square, to_square)
-            if move in self.board.legal_moves:
+
+            # Validate the move and pass it to the main application
+            if self.board.is_legal(move):
                 self.app.handle_move(move)
             else:
-                self.app.status_bar.update_status("Illegal move.", color="#d9534f") # Removed Style reference
-            self.dragging_piece = None
-            self.drag_image = None
+                self.app.update_status(f"Illegal move attempted: {move}.", color="red")
+
+            # Clear selection and redraw
             self.selected_square = None
-            self.drag_start = None
             self.highlight_squares = []
             self.draw_board()
             self.draw_pieces()
-            self.delete("drag")

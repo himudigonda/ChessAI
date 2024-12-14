@@ -1,3 +1,4 @@
+# train.py
 # chess_app/train.py
 
 import chess
@@ -40,7 +41,7 @@ def self_play(model, device, num_games=100, engine_path=Config.ENGINE_PATH, dept
             if model:
                 model.eval()
                 with torch.no_grad():
-                    policy, value = model(board_to_tensor(board).unsqueeze(0).to(device))
+                    policy, value, quality = model(board_to_tensor(board).unsqueeze(0).to(device))
                 move_probs = torch.exp(policy).cpu().numpy()[0]
                 top_move_indices = move_probs.argsort()[-10:][::-1]  # Top 10 moves
                 move_found = False
@@ -132,7 +133,7 @@ def train_model(model, device, training_data, epochs=10, batch_size=64, lr=1e-4,
             qualities = qualities.to(device).long()
 
             optimizer.zero_grad()
-            policy, value = model(boards)
+            policy, value, quality = model(boards)
 
             # Policy loss
             loss_policy = criterion_policy(policy, moves)
@@ -141,18 +142,18 @@ def train_model(model, device, training_data, epochs=10, batch_size=64, lr=1e-4,
             loss_value = criterion_value(value.squeeze(), outcomes)
 
             # Move Quality loss
-            # Assuming move_quality is a separate output, which requires modifying the model
-            # For simplicity, we'll skip this unless the model is adjusted accordingly
+            loss_quality = criterion_quality(quality, qualities)
+
 
             # Total loss
-            loss = loss_policy + loss_value  # + loss_quality
+            loss = loss_policy + loss_value + loss_quality
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
             total_loss_policy += loss_policy.item()
             total_loss_value += loss_value.item()
-            # total_loss_quality += loss_quality.item()
+            total_loss_quality += loss_quality.item()
 
             if logger:
                 loop.set_postfix(loss=loss.item())
@@ -160,10 +161,10 @@ def train_model(model, device, training_data, epochs=10, batch_size=64, lr=1e-4,
         avg_loss = total_loss / len(dataloader)
         avg_loss_policy = total_loss_policy / len(dataloader)
         avg_loss_value = total_loss_value / len(dataloader)
-        # avg_loss_quality = total_loss_quality / len(dataloader)
+        avg_loss_quality = total_loss_quality / len(dataloader)
 
         if logger:
-            logger.info(f"Epoch [{epoch+1}/{epochs}], Average Loss: {avg_loss:.4f}, Policy Loss: {avg_loss_policy:.4f}, Value Loss: {avg_loss_value:.4f}")
+            logger.info(f"Epoch [{epoch+1}/{epochs}], Average Loss: {avg_loss:.4f}, Policy Loss: {avg_loss_policy:.4f}, Value Loss: {avg_loss_value:.4f}, Quality Loss: {avg_loss_quality:.4f}")
             # Log move quality loss if implemented
 
         # Log to TensorBoard
@@ -171,8 +172,8 @@ def train_model(model, device, training_data, epochs=10, batch_size=64, lr=1e-4,
             metrics = {
                 'Loss/Total': avg_loss,
                 'Loss/Policy': avg_loss_policy,
-                'Loss/Value': avg_loss_value
-                # 'Loss/Quality': avg_loss_quality
+                'Loss/Value': avg_loss_value,
+                'Loss/Quality': avg_loss_quality
             }
             tensorboard_logger.log_metrics(metrics, epoch)
 
@@ -257,3 +258,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

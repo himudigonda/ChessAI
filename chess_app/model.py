@@ -85,6 +85,13 @@ class ChessNet(nn.Module):
         self.value_fc1 = nn.Linear(256 * board_size * board_size, 1024)
         self.value_fc2 = nn.Linear(1024, 1)
 
+        # Quality head
+        self.quality_conv = nn.Conv2d(512, 256, 1)
+        self.quality_bn = nn.BatchNorm2d(256)
+        self.quality_relu = nn.ReLU(inplace=True)
+        self.quality_fc1 = nn.Linear(256 * board_size * board_size, 256)
+        self.quality_fc2 = nn.Linear(256, 5) # 5 classes for move quality
+
         self.dropout = nn.Dropout(p=0.3)
 
     def forward(self, x):
@@ -125,7 +132,15 @@ class ChessNet(nn.Module):
         v = self.dropout(F.relu(v))
         v = torch.tanh(self.value_fc2(v))
 
-        return p, v
+        # Quality head
+        q = self.quality_relu(self.quality_bn(self.quality_conv(attn_output)))
+        q = q.view(q.size(0), -1)
+        q = self.quality_fc1(q)
+        q = self.dropout(F.relu(q))
+        q = self.quality_fc2(q)
+
+
+        return p, v, q
 
     def predict_move_quality(self, x):
         """
@@ -137,18 +152,18 @@ class ChessNet(nn.Module):
         # Placeholder implementation
         # In practice, this should be trained with labeled data
         # Here we use the value head to classify move quality
-        _, value = self.forward(x)
-        value = value.squeeze().detach().cpu().numpy()
-        if value > 0.75:
-            return "Great Step"
-        elif value > 0.5:
-            return "Good Step"
-        elif value > 0.25:
-            return "Average Step"
-        elif value > 0.0:
-            return "Bad Step"
-        else:
-            return "Blunder"
+        _, _, q = self.forward(x)
+        quality_probs = F.softmax(q, dim=1).detach().cpu().numpy()
+        quality_index = np.argmax(quality_probs)
+        move_quality_mapping = {
+            0: "Blunder",
+            1: "Bad Step",
+            2: "Average Step",
+            3: "Good Step",
+            4: "Great Step",
+        }
+        return move_quality_mapping.get(quality_index, "Average Step")
+
 
 
 def load_model(model, path, device):

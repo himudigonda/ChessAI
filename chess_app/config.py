@@ -32,3 +32,32 @@ class Config:
     NUM_ITERATIONS = 5  # Number of training iterations
     NUM_GAMES_PER_ITERATION = 100  # Number of games per iteration
     EPOCHS = 10  # Number of epochs for training
+
+    # UI Configurations
+    LIGHT_THEME = {
+        "background": "#F5F5F5",
+        "foreground": "#000000",
+        "button_bg": "#E0E0E0",
+        "button_fg": "#000000",
+        "highlight_color": "#0073e6",
+        "chessboard_light": "#f0d9b5",
+        "chessboard_dark": "#b58863",
+        "status_success": "#00a651",
+        "status_error": "#d9534f",
+        "status_info": "#5bc0de",
+    }
+
+    DARK_THEME = {
+        "background": "#2E2E2E",
+        "foreground": "#FFFFFF",
+        "button_bg": "#4D4D4D",
+        "button_fg": "#FFFFFF",
+        "highlight_color": "#1E90FF",
+        "chessboard_light": "#CCCCCC",
+        "chessboard_dark": "#333333",
+        "status_success": "#28a745",
+        "status_error": "#dc3545",
+        "status_info": "#17a2b8",
+    }
+
+    CURRENT_THEME = LIGHT_THEME
