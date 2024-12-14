@@ -7,7 +7,7 @@ from chess_app.model import ChessNet, load_model, save_model
 from chess_app.data import board_to_tensor, move_to_index, index_to_move
 import random
 import os
-from chess_app.utils import get_device, Logger, TensorBoardLogger, EloRating
+from chess_app.utils import get_device, Logger, TensorBoardLogger, EloRating, AIPlayer
 from chess_app.config import Config
 import json
 

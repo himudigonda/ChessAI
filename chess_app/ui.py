@@ -720,13 +720,6 @@ class ChessApp:
         scroll.config(state=tk.DISABLED)
         self.update_status_bar("Game analysis completed.")
 
-    def show_predictions(self, text):
-        # Display the predictions in a popup or dedicated UI element
-        prediction_window = tk.Toplevel(self.root)
-        prediction_window.title("Future Predictions")
-        prediction_window.geometry("300x200")
-        label = tk.Label(prediction_window, text=text, justify=tk.LEFT, font=("Helvetica", 12))
-        label.pack(pady=10, padx=10)
 
     def start_ai_game(self):
         """

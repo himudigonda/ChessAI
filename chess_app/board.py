@@ -60,11 +60,7 @@ class ChessBoard(tk.Canvas):
         canvas_height = self.winfo_height()
         self.square_size = min(canvas_width, canvas_height) // 8
 
-        # Define colors based on theme
-        if self.app.theme.current_theme == "light":
-            colors = ["#EEEED2", "#769656"]
-        else:
-            colors = ["#303030", "#B58863"]
+        colors = ["#EEEED2", "#769656"]
 
         for row in range(8):
             for col in range(8):

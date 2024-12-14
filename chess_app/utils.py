@@ -5,6 +5,8 @@ import chess.engine
 import chess.pgn
 from chess_app.model import ChessNet, load_model, save_model
 from chess_app.data import board_to_tensor, move_to_index, index_to_move, ChessDatasetTrain
+import torch.optim as optim
+import torch.nn as nn
 import random
 import os
 import threading
@@ -43,8 +45,8 @@ class AIPlayer:
         else:
             print("Trained model not found. Using Stockfish as fallback.")
             self.model = None
-            self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")  # Update path if necessary
-
+            self.engine = chess.engine.SimpleEngine.popen_uci("/path/to/stockfish")  # Update path
+    
     def get_best_move(self, board):
         if self.model and board.turn == self.side:
             # Ensure the model is in evaluation mode
@@ -67,7 +69,7 @@ class AIPlayer:
         else:
             # Fallback to random move
             return random.choice(list(board.legal_moves))
-
+    
     def close(self):
         if hasattr(self, 'engine') and self.engine:
             self.engine.quit()
@@ -331,42 +333,42 @@ class SoundEffects:
         if self.capture_sound:
             self.capture_sound.play()
 
-class Theme:
-    def __init__(self, app):
-        self.app = app
-        self.current_theme = "light"
+# class Theme:
+#     def __init__(self, app):
+#         self.app = app
+#         self.current_theme = "light"
 
-    def apply_light_theme(self):
-        # Update all relevant widgets
-        # Assuming self.app.ui_side_panel.move_list exists
-        self.app.ui_side_panel.move_list.configure(bg="#F0F0F0", fg="#333333")
-        self.app.ui_side_panel.captured_pieces_white.configure(bg="#FFFFFF", fg="#333333")
-        self.app.ui_side_panel.captured_pieces_black.configure(bg="#FFFFFF", fg="#333333")
-        self.app.ui_side_panel.timer_label.configure(bg="#FFFFFF", fg="#000000")
-        self.app.ui_side_panel.status_label.configure(bg="#FFFFFF", fg="#000000")
-        self.app.board_frame.configure(bg="#D6D6D6")
-        self.app.side_panel_frame.configure(bg="#FFFFFF")
-        self.app.status_bar.configure(bg="#F5F5F7", fg="#333333")
-        # Similarly, configure other widgets if any
+#     def apply_light_theme(self):
+#         # Update all relevant widgets
+#         # Assuming self.app.ui_side_panel.move_list exists
+#         self.app.ui_side_panel.move_list.configure(bg="#F0F0F0", fg="#333333")
+#         self.app.ui_side_panel.captured_pieces_white.configure(bg="#FFFFFF", fg="#333333")
+#         self.app.ui_side_panel.captured_pieces_black.configure(bg="#FFFFFF", fg="#333333")
+#         self.app.ui_side_panel.timer_label.configure(bg="#FFFFFF", fg="#000000")
+#         self.app.ui_side_panel.status_label.configure(bg="#FFFFFF", fg="#000000")
+#         self.app.board_frame.configure(bg="#D6D6D6")
+#         self.app.side_panel_frame.configure(bg="#FFFFFF")
+#         self.app.status_bar.configure(bg="#F5F5F7", fg="#333333")
+#         # Similarly, configure other widgets if any
 
-    def apply_dark_theme(self):
-        self.app.ui_side_panel.move_list.configure(bg="#4D4D4D", fg="#FFFFFF")
-        self.app.ui_side_panel.captured_pieces_white.configure(bg="#303030", fg="#FFFFFF")
-        self.app.ui_side_panel.captured_pieces_black.configure(bg="#303030", fg="#FFFFFF")
-        self.app.ui_side_panel.timer_label.configure(bg="#303030", fg="#FFFFFF")
-        self.app.ui_side_panel.status_label.configure(bg="#303030", fg="#FFFFFF")
-        self.app.board_frame.configure(bg="#303030")
-        self.app.side_panel_frame.configure(bg="#303030")
-        self.app.status_bar.configure(bg="#2E2E2E", fg="#FFFFFF")
-        # Similarly, configure other widgets if any
+#     def apply_dark_theme(self):
+#         self.app.ui_side_panel.move_list.configure(bg="#4D4D4D", fg="#FFFFFF")
+#         self.app.ui_side_panel.captured_pieces_white.configure(bg="#303030", fg="#FFFFFF")
+#         self.app.ui_side_panel.captured_pieces_black.configure(bg="#303030", fg="#FFFFFF")
+#         self.app.ui_side_panel.timer_label.configure(bg="#303030", fg="#FFFFFF")
+#         self.app.ui_side_panel.status_label.configure(bg="#303030", fg="#FFFFFF")
+#         self.app.board_frame.configure(bg="#303030")
+#         self.app.side_panel_frame.configure(bg="#303030")
+#         self.app.status_bar.configure(bg="#2E2E2E", fg="#FFFFFF")
+#         # Similarly, configure other widgets if any
 
-    def toggle_theme(self):
-        if self.current_theme == "light":
-            self.apply_dark_theme()
-            self.current_theme = "dark"
-        else:
-            self.apply_light_theme()
-            self.current_theme = "light"
+#     def toggle_theme(self):
+#         if self.current_theme == "light":
+#             self.apply_dark_theme()
+#             self.current_theme = "dark"
+#         else:
+#             self.apply_light_theme()
+#             self.current_theme = "light"
 
 class Timer:
     @staticmethod
