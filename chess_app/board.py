@@ -1,4 +1,5 @@
 # chess_app/board.py
+
 import tkinter as tk
 from chess import SQUARES, square_rank, square_file, Move
 from chess_app.utils import Timer, SoundEffects
@@ -51,9 +52,8 @@ class ChessBoard(tk.Canvas):
     def on_canvas_resize(self, event):
         self.draw_chessboard()
         self.draw_pieces()
-
     def draw_chessboard(self):
-        self.delete("square")
+        self.delete("all")  # Clear everything before redrawing
         canvas_width = self.winfo_width()
         canvas_height = self.winfo_height()
         self.square_size = min(canvas_width, canvas_height) // 8
@@ -74,7 +74,7 @@ class ChessBoard(tk.Canvas):
             self.highlight_square(to_square, "#E6B800")
 
     def draw_pieces(self):
-        self.delete("piece")
+        # Ensure pieces are drawn after squares
         for square in SQUARES:
             piece = self.board.piece_at(square)
             if piece:
@@ -86,11 +86,10 @@ class ChessBoard(tk.Canvas):
                 image = self.piece_images.get(piece.symbol())
                 if image:
                     self.create_image(
-                        x, y, image=image, tags=f"piece_{square}"
+                        x, y, image=image, tags=f"piece_{square}", anchor=tk.CENTER
                     )
                 else:
                     print(f"Warning: Image for piece {piece.symbol()} not found.")
-
     def highlight_square(self, square, color):
         row, col = 7 - square_rank(square), square_file(square)
         x1, y1 = col * self.square_size, row * self.square_size
@@ -98,6 +97,7 @@ class ChessBoard(tk.Canvas):
         self.create_rectangle(
             x1, y1, x2, y2, outline=color, width=3, tags="highlight"
         )
+# chess_app/board.py (continued)
 
     def on_click(self, event):
         if getattr(self, 'square_size', 0) == 0:
@@ -115,11 +115,6 @@ class ChessBoard(tk.Canvas):
             self.app.drag_start_coords = (event.x, event.y)
             # Hide the piece image temporarily
             self.itemconfigure(f"piece_{clicked_square}", state="hidden")
-
-    def on_drag(self, event):
-        if self.app.dragging_piece:
-            self.delete("drag")
-            self.create_image(event.x, event.y, image=self.app.dragging_piece, tags="drag")
 
     def on_drop(self, event):
         if self.app.dragging_piece:
@@ -149,10 +144,19 @@ class ChessBoard(tk.Canvas):
             self.app.drag_start_coords = None
             self.app.legal_moves = []
 
+            # Restore the piece visibility in case the move was illegal
+            if move not in self.app.legal_moves:
+                self.itemconfigure(f"piece_{self.app.selected_square}", state="normal")
+
             self.delete("drag")
             self.delete("highlight")
             self.draw_chessboard()
             self.draw_pieces()
+
+    def on_drag(self, event):
+        if self.app.dragging_piece:
+            self.delete("drag")
+            self.create_image(event.x, event.y, image=self.app.dragging_piece, tags="drag", anchor=tk.CENTER)
 
     def square_from_coords(self, col, row):
         return chess.square(col, 7 - row)
@@ -195,7 +199,7 @@ class ChessBoard(tk.Canvas):
         dy = (end_y - start_y) / steps
 
         current_x, current_y = start_x, start_y
-        self.create_image(current_x, current_y, image=piece_image, tags="anim_piece")
+        self.create_image(current_x, current_y, image=piece_image, tags="anim_piece", anchor=tk.CENTER)
         for _ in range(steps):
             current_x += dx
             current_y += dy

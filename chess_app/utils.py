@@ -127,8 +127,8 @@ class Theme:
         self.app.status_bar.configure(bg="#F5F5F7", fg="#333333")
         self.app.timer_label.configure(bg="#FFFFFF", fg="#000000")
         self.app.status_label.configure(bg="#FFFFFF", fg="#000000")
-        self.app.captured_label_white.configure(bg="#FFFFFF", fg="#000000")
-        self.app.captured_label_black.configure(bg="#FFFFFF", fg="#000000")
+        self.app.captured_pieces_white.configure(bg="#FFFFFF", fg="#000000")
+        self.app.captured_pieces_black.configure(bg="#FFFFFF", fg="#000000")
         self.app.move_list.configure(bg="#F0F0F0", fg="#333333")
         # Update other widgets as needed
 
@@ -138,7 +138,7 @@ class Theme:
         self.app.status_bar.configure(bg="#2E2E2E", fg="#FFFFFF")
         self.app.timer_label.configure(bg="#3C3C3C", fg="#FFFFFF")
         self.app.status_label.configure(bg="#3C3C3C", fg="#FFFFFF")
-        self.app.captured_label_white.configure(bg="#3C3C3C", fg="#FFFFFF")
-        self.app.captured_label_black.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.captured_pieces_white.configure(bg="#3C3C3C", fg="#FFFFFF")
+        self.app.captured_pieces_black.configure(bg="#3C3C3C", fg="#FFFFFF")
         self.app.move_list.configure(bg="#4F4F4F", fg="#FFFFFF")
         # Update other widgets as needed

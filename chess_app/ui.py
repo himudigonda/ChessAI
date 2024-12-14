@@ -1,3 +1,5 @@
+# chess_app/ui.py
+
 import random
 import threading
 import tkinter as tk
@@ -6,13 +8,13 @@ import chess
 import chess.pgn
 from chess_app.board import ChessBoard
 from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer
-
+import time
 
 class ChessApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Chess AI")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x800")  # Increased width for side panel
         self.root.configure(bg="#F5F5F7")
 
         self.board = chess.Board()
@@ -27,7 +29,6 @@ class ChessApp:
         self.black_time = 300  # 5 minutes for black
         self.white_increment = 5  # seconds per move
         self.black_increment = 5
-        # Removed self.is_white_turn
         self.captured_pieces = {"white": [], "black": []}
         self.redo_stack = []
 
@@ -54,15 +55,18 @@ class ChessApp:
         self.main_frame = ttk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.board_frame = tk.Frame(self.main_frame, bg="#D6D6D6", bd=0, highlightthickness=0)
-        self.board_frame.grid(row=0, column=0, padx=10, pady=10, sticky="NSEW")
-
-        self.side_panel_frame = tk.Frame(self.main_frame, bg="#FFFFFF", bd=0, highlightthickness=0)
-        self.side_panel_frame.grid(row=0, column=1, padx=10, pady=10, sticky="NSEW")
-
+        # Configure grid to have two columns: board and side panel
         self.main_frame.columnconfigure(0, weight=3)
         self.main_frame.columnconfigure(1, weight=1)
         self.main_frame.rowconfigure(0, weight=1)
+
+        # Board Frame
+        self.board_frame = tk.Frame(self.main_frame, bg="#D6D6D6", bd=0, highlightthickness=0)
+        self.board_frame.grid(row=0, column=0, padx=10, pady=10, sticky="NSEW")
+
+        # Side Panel Frame
+        self.side_panel_frame = tk.Frame(self.main_frame, bg="#FFFFFF", bd=0, highlightthickness=0)
+        self.side_panel_frame.grid(row=0, column=1, padx=10, pady=10, sticky="NSEW")
 
     def create_chessboard(self):
         self.chess_board = ChessBoard(self.board_frame, self)
@@ -157,17 +161,29 @@ class ChessApp:
 
         # Captured Pieces
         captured_pieces_frame = tk.Frame(side_panel, bg="#FFFFFF")
-        captured_pieces_frame.pack(pady=10)
+        captured_pieces_frame.pack(pady=10, anchor="n")
 
-        self.captured_label_white = tk.Label(
-            captured_pieces_frame, text="White Captured: ", bg="#FFFFFF", font=("Helvetica", 12)
+        # White Captured Pieces
+        white_captured_label = tk.Label(
+            captured_pieces_frame, text="White Captured:", bg="#FFFFFF", font=("Helvetica", 12, "bold")
         )
-        self.captured_label_white.pack(anchor="w")
+        white_captured_label.grid(row=0, column=0, sticky="w")
 
-        self.captured_label_black = tk.Label(
-            captured_pieces_frame, text="Black Captured: ", bg="#FFFFFF", font=("Helvetica", 12)
+        self.captured_pieces_white = tk.Label(
+            captured_pieces_frame, text="", bg="#FFFFFF", font=("Helvetica", 12), wraplength=200, justify="left"
         )
-        self.captured_label_black.pack(anchor="w")
+        self.captured_pieces_white.grid(row=1, column=0, sticky="w")
+
+        # Black Captured Pieces
+        black_captured_label = tk.Label(
+            captured_pieces_frame, text="Black Captured:", bg="#FFFFFF", font=("Helvetica", 12, "bold")
+        )
+        black_captured_label.grid(row=2, column=0, sticky="w")
+
+        self.captured_pieces_black = tk.Label(
+            captured_pieces_frame, text="", bg="#FFFFFF", font=("Helvetica", 12), wraplength=200, justify="left"
+        )
+        self.captured_pieces_black.grid(row=3, column=0, sticky="w")
 
         # Move List
         self.move_list_label = tk.Label(
@@ -177,18 +193,19 @@ class ChessApp:
             bg="#FFFFFF",
             fg="#000000",
         )
-        self.move_list_label.pack(pady=10)
+        self.move_list_label.pack(pady=(20, 10))
 
         self.move_list = scrolledtext.ScrolledText(
             side_panel,
-            height=15,
+            height=20,
             width=25,
             state=tk.DISABLED,
             bg="#F0F0F0",
             fg="#333333",
             font=("Helvetica", 12),
+            wrap=tk.WORD
         )
-        self.move_list.pack(pady=10)
+        self.move_list.pack(pady=10, fill=tk.BOTH, expand=True)
 
     def create_status_bar(self):
         self.status_bar = tk.Label(
@@ -263,7 +280,6 @@ class ChessApp:
                     else:
                         self.captured_pieces["white"].remove(captured_piece.symbol())
             self.last_move = None
-            # Removed self.is_white_turn
             self.update_timer()
             self.chess_board.draw_chessboard()
             self.chess_board.draw_pieces()
@@ -283,7 +299,6 @@ class ChessApp:
                     else:
                         self.captured_pieces["white"].append(captured_piece.symbol())
             self.last_move = (move.from_square, move.to_square)
-            # Removed self.is_white_turn
             self.update_timer()
             self.chess_board.draw_chessboard()
             self.chess_board.draw_pieces()
@@ -295,8 +310,9 @@ class ChessApp:
         white_captured = " ".join(self.captured_pieces["white"])
         black_captured = " ".join(self.captured_pieces["black"])
 
-        self.captured_label_white.config(text=f"White Captured: {white_captured}")
-        self.captured_label_black.config(text=f"Black Captured: {black_captured}")
+        # Update the labels instead of config on separate labels
+        self.captured_pieces_white.config(text=white_captured)
+        self.captured_pieces_black.config(text=black_captured)
 
     def update_move_list(self, move_san):
         self.move_list.config(state=tk.NORMAL)
@@ -311,26 +327,19 @@ class ChessApp:
 
     def update_move_list_undo(self):
         self.move_list.config(state=tk.NORMAL)
-        # Remove the last move entry
         content = self.move_list.get("1.0", tk.END).strip().split("\n")
         if content:
             last_line = content[-1]
-            if " " in last_line:
-                # It's a White move; remove it
-                content.pop()
-                self.move_list.delete("1.0", tk.END)
-                for line in content:
-                    self.move_list.insert(tk.END, line + "\n")
+            if last_line.startswith(f"{self.board.fullmove_number - 1}. ..."):
+                # It's a Black move; remove the last line
+                self.move_list.delete(f"{len(content)}.0 linestart", f"{len(content)}.end")
             else:
-                # It's a Black move; remove it
-                if len(content) >= 1:
-                    last_move = content[-1]
-                    if last_move.endswith("\n"):
-                        content[-1] = last_move.rstrip("\n")
-                    if last_move:
-                        content[-1] = last_move.rstrip("\n")
-                    self.move_list.delete("end-2c", "end-1c")
-            self.move_list.config(state=tk.DISABLED)
+                # It's a White move; remove the last move after the move number
+                # Find the last space and remove everything after it
+                last_space = last_line.rfind(" ")
+                if last_space != -1:
+                    self.move_list.delete(f"{len(content)}.{last_space+1}c", f"{len(content)}.end")
+        self.move_list.config(state=tk.DISABLED)
 
     def update_move_list_redo(self, move):
         self.move_list.config(state=tk.NORMAL)
@@ -365,7 +374,10 @@ class ChessApp:
                     self.captured_pieces["white"].append(captured_piece.symbol())
 
             # Generate SAN before pushing the move
-            move_san = self.board.san(move)
+            try:
+                move_san = self.board.san(move)
+            except ValueError:
+                move_san = str(move)
 
             self.board.push(move)
             self.update_captured_pieces()
@@ -394,48 +406,56 @@ class ChessApp:
         def ai_move_thread():
             ai_move = self.ai_player.get_best_move(self.board)
             if ai_move:
-                # Generate SAN before pushing
-                move_san = self.board.san(ai_move)
+                # Introduce a delay before making the move
+                time.sleep(1.5)  # 1.5 seconds delay
 
-                self.board.push(ai_move)
-                self.last_move = (ai_move.from_square, ai_move.to_square)
-
-                # Play capture or move sound
-                if self.sound_enabled:
-                    if self.board.is_capture(ai_move):
-                        self.sound_effects.play_capture()
-                    else:
-                        self.sound_effects.play_move()
-
-                captured_piece = self.board.piece_at(ai_move.to_square)
-                if captured_piece:
-                    if captured_piece.color:
-                        self.captured_pieces["black"].append(captured_piece.symbol())
-                    else:
-                        self.captured_pieces["white"].append(captured_piece.symbol())
-
-                self.update_captured_pieces()
-                self.update_move_list(move_san)  # Pass SAN instead of move
-
-                # Apply increment based on the move that was just pushed
-                if self.board.turn == chess.WHITE:
-                    # Black just moved
-                    self.black_time += self.black_increment
-                else:
-                    # White just moved
-                    self.white_time += self.white_increment
-
-                self.update_timer()
-
-                self.chess_board.draw_chessboard()
-                self.chess_board.draw_pieces()
-
-                self.update_status_bar("AI made its move.")
-
-                if self.board.is_game_over():
-                    self.handle_game_over()
+                # Schedule the move to be pushed on the main thread
+                self.root.after(0, self.execute_ai_move, ai_move)
 
         threading.Thread(target=ai_move_thread).start()
+
+    def execute_ai_move(self, ai_move):
+        # Generate SAN before pushing
+        try:
+            move_san = self.board.san(ai_move)
+        except ValueError:
+            move_san = str(ai_move)
+
+        self.board.push(ai_move)
+        self.last_move = (ai_move.from_square, ai_move.to_square)
+
+        # Play capture or move sound
+        if self.sound_enabled:
+            if self.board.is_capture(ai_move):
+                self.sound_effects.play_capture()
+            else:
+                self.sound_effects.play_move()
+
+        captured_piece = self.board.piece_at(ai_move.to_square)
+        if captured_piece:
+            if captured_piece.color:
+                self.captured_pieces["black"].append(captured_piece.symbol())
+            else:
+                self.captured_pieces["white"].append(captured_piece.symbol())
+
+        self.update_captured_pieces()
+        self.update_move_list(move_san)  # Pass SAN instead of move
+
+        # Apply increment based on the move that was just pushed
+        if self.board.turn == chess.WHITE:
+            # Black just moved
+            self.black_time += self.black_increment
+        else:
+            # White just moved
+            self.white_time += self.white_increment
+
+        self.update_timer()
+        self.chess_board.draw_chessboard()
+        self.chess_board.draw_pieces()
+        self.update_status_bar("AI made its move.")
+
+        if self.board.is_game_over():
+            self.handle_game_over()
 
     def handle_game_over(self):
         outcome = self.board.outcome()
@@ -465,8 +485,6 @@ class ChessApp:
             try:
                 self.board = SaveLoad.load_game(filename)
                 self.last_move = None
-                # Removed self.is_white_turn
-                # self.is_white_turn = self.board.turn
                 self.white_time = 300
                 self.black_time = 300
                 self.captured_pieces = {"white": [], "black": []}
@@ -506,7 +524,6 @@ class ChessApp:
     def restart_game(self):
         self.board.reset()
         self.last_move = None
-        # Removed self.is_white_turn
         self.white_time = 300
         self.black_time = 300
         self.captured_pieces = {"white": [], "black": []}
@@ -557,7 +574,10 @@ class ChessApp:
         scroll.pack(expand=True, fill='both')
 
         for move, eval_score in analysis:
-            move_san = self.board.san(move)
+            try:
+                move_san = self.board.san(move)
+            except ValueError:
+                move_san = str(move)
             eval_text = f"Move: {move_san}, Evaluation: {eval_score}"
             scroll.insert(tk.END, eval_text + "\n")
 
