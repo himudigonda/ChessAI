@@ -2,11 +2,13 @@
 
 import os
 
+
 class Config:
     """
     Configuration class for the Chess AI project.
     Contains all the configurable parameters.
     """
+
     # Model and Training Configuration
     MODEL_PATH = "chess_model.pth"  # Path to save/load the trained model
     ENGINE_PATH = "/path/to/stockfish"  # Path to the Stockfish engine executable

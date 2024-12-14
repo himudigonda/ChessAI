@@ -22,6 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
+
 def get_device():
     """
     Selects the best available device (CUDA or CPU).
@@ -34,6 +35,7 @@ def get_device():
     else:
         print("Using CPU device")
         return torch.device("cpu")
+
 
 class AIPlayer:
     """
@@ -53,13 +55,28 @@ class AIPlayer:
         self.model = ChessNet().to(self.device)
         self.model_path = model_path
         self.side = side
+        self.difficulty_level = 2  # Default difficulty
+
         if os.path.exists(model_path):
             load_model(self.model, model_path, self.device)
             print("Loaded trained model.")
+            self.engine = None
         else:
             print("Trained model not found. Using Stockfish as fallback.")
-            self.model = None
-            self.engine = chess.engine.SimpleEngine.popen_uci("/path/to/stockfish")  # Update path accordingly
+            self.engine = chess.engine.SimpleEngine.popen_uci(
+                "/usr/local/bin/stockfish"
+            )  # Update path accordingly
+
+    def set_difficulty(self, level):
+        """
+        Sets the AI difficulty level.
+
+        :param level: Integer representing the difficulty level.
+        """
+        self.difficulty_level = level
+        if self.engine:
+            # Example: Adjust Stockfish's Skill Level based on difficulty
+            self.engine.configure({"Skill Level": level})
 
     def get_best_move(self, board):
         """
@@ -73,7 +90,9 @@ class AIPlayer:
             self.model.eval()
             board_tensor = board_to_tensor(board).to(self.device)
             with torch.no_grad():
-                policy, value = self.model(board_tensor.unsqueeze(0))  # Add batch dimension
+                policy, value = self.model(
+                    board_tensor.unsqueeze(0)
+                )  # Add batch dimension
             move_probs = torch.exp(policy).cpu().numpy()[0]
             top_move_indices = move_probs.argsort()[-10:][::-1]  # Top 10 moves
             for move_index in top_move_indices:
@@ -82,9 +101,11 @@ class AIPlayer:
                     return move
             # Fallback to random move if no top move is legal
             return random.choice(list(board.legal_moves))
-        elif hasattr(self, 'engine') and self.engine:
+        elif self.engine:
             # Use Stockfish if AI model is not available or it's not AI's turn
-            result = self.engine.play(board, chess.engine.Limit(time=0.1))
+            result = self.engine.play(
+                board, chess.engine.Limit(depth=self.difficulty_level)
+            )
             return result.move
         else:
             # Fallback to random move
@@ -94,8 +115,9 @@ class AIPlayer:
         """
         Closes the AIPlayer's engine if it is using Stockfish.
         """
-        if hasattr(self, 'engine') and self.engine:
+        if self.engine:
             self.engine.quit()
+
 
 class GameAnalyzer:
     """
@@ -125,7 +147,9 @@ class GameAnalyzer:
         for move in board.move_stack:
             temp_board.push(move)
             try:
-                info = self.engine.analyse(temp_board, chess.engine.Limit(depth=self.depth))
+                info = self.engine.analyse(
+                    temp_board, chess.engine.Limit(depth=self.depth)
+                )
                 score = info["score"].white()
                 if score.is_mate():
                     eval_score = 100000 if score.mate() > 0 else -100000
@@ -143,6 +167,7 @@ class GameAnalyzer:
         """
         self.engine.quit()
 
+
 class SaveLoad:
     """
     SaveLoad provides static methods to save and load chess games in PGN format.
@@ -157,7 +182,7 @@ class SaveLoad:
         :param filename: Path to the PGN file to save.
         """
         game = chess.pgn.Game.from_board(board)
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             exporter = chess.pgn.FileExporter(f)
             game.accept(exporter)
 
@@ -170,7 +195,7 @@ class SaveLoad:
         :return: chess.Board object representing the loaded game.
         :raises ValueError: If no game is found in the PGN file.
         """
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             game = chess.pgn.read_game(f)
         if game is None:
             raise ValueError("No game found in the PGN file.")
@@ -178,6 +203,7 @@ class SaveLoad:
         for move in game.mainline_moves():
             board.push(move)
         return board
+
 
 class GameSaver:
     """
@@ -217,7 +243,7 @@ class GameSaver:
                 file_path = os.path.join(folder_path, f"games_{file_num}.pgn")
                 if os.path.exists(file_path):
                     # Count the number of games in the file
-                    with open(file_path, 'r') as f:
+                    with open(file_path, "r") as f:
                         games = []
                         while True:
                             game = chess.pgn.read_game(f)
@@ -251,7 +277,7 @@ class GameSaver:
         file_path = os.path.join(folder_path, f"games_{self.current_file}.pgn")
 
         # Append the game to the file
-        with open(file_path, 'a') as f:
+        with open(file_path, "a") as f:
             game = chess.pgn.Game.from_board(board)
             exporter = chess.pgn.FileExporter(f)
             game.accept(exporter)
@@ -266,20 +292,22 @@ class GameSaver:
                 self.current_folder += 1
                 if self.current_folder > self.max_folders:
                     self.current_folder = 1  # Overwrite from first folder
+
+
 class Logger:
     def __init__(self):
-        self.logger = logging.getLogger('ChessAI')
+        self.logger = logging.getLogger("ChessAI")
         self.logger.setLevel(logging.DEBUG)
 
         # Create handlers
         c_handler = logging.StreamHandler()
-        f_handler = logging.FileHandler(os.path.join(Config.LOG_DIR, 'chess_ai.log'))
+        f_handler = logging.FileHandler(os.path.join(Config.LOG_DIR, "chess_ai.log"))
         c_handler.setLevel(logging.INFO)
         f_handler.setLevel(logging.DEBUG)
 
         # Create formatters and add to handlers
-        c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        c_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        f_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         c_handler.setFormatter(c_format)
         f_handler.setFormatter(f_format)
 
@@ -289,6 +317,7 @@ class Logger:
 
     def get_logger(self):
         return self.logger
+
 
 class PlotlyDashApp(threading.Thread):
     def __init__(self, logger, config=Config):
@@ -309,52 +338,65 @@ class PlotlyDashApp(threading.Thread):
 
         self.app = dash.Dash(__name__)
 
-        self.app.layout = html.Div([
-            html.H1("Chess AI Training Progress"),
-            dcc.Graph(id='live-update-graph'),
-            dcc.Interval(
-                id='interval-component',
-                interval=5*1000,  # in milliseconds
-                n_intervals=0
-            )
-        ])
+        self.app.layout = html.Div(
+            [
+                html.H1("Chess AI Training Progress"),
+                dcc.Graph(id="live-update-graph"),
+                dcc.Interval(
+                    id="interval-component",
+                    interval=5 * 1000,  # in milliseconds
+                    n_intervals=0,
+                ),
+            ]
+        )
 
         @self.app.callback(
-            dash.dependencies.Output('live-update-graph', 'figure'),
-            [dash.dependencies.Input('interval-component', 'n_intervals')]
+            dash.dependencies.Output("live-update-graph", "figure"),
+            [dash.dependencies.Input("interval-component", "n_intervals")],
         )
         def update_graph_live(n):
             # For simplicity, assume logs are stored in a JSON file
             # where each entry contains 'epoch', 'loss', 'accuracy', 'elo'
-            log_file = os.path.join(self.config.LOG_DIR, 'chess_ai_training.json')
+            log_file = os.path.join(self.config.LOG_DIR, "chess_ai_training.json")
             if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
+                with open(log_file, "r") as f:
                     data = json.load(f)
-                self.x_data = [entry['epoch'] for entry in data]
-                self.y_data = [entry['loss'] for entry in data]
-                self.elo_data = [entry['elo'] for entry in data]
+                self.x_data = [entry["epoch"] for entry in data]
+                self.y_data = [entry["loss"] for entry in data]
+                self.elo_data = [entry["elo"] for entry in data]
             else:
                 data = []
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=self.x_data, y=self.y_data, mode='lines+markers', name='Loss'))
-            fig.add_trace(go.Scatter(x=self.x_data, y=self.elo_data, mode='lines+markers', name='Elo Rating', yaxis='y2'))
-            fig.update_layout(
-                title='Training Progress',
-                xaxis_title='Epoch',
-                yaxis_title='Loss',
-                yaxis2=dict(
-                    title='Elo Rating',
-                    overlaying='y',
-                    side='right'
+            fig.add_trace(
+                go.Scatter(
+                    x=self.x_data, y=self.y_data, mode="lines+markers", name="Loss"
                 )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=self.x_data,
+                    y=self.elo_data,
+                    mode="lines+markers",
+                    name="Elo Rating",
+                    yaxis="y2",
+                )
+            )
+            fig.update_layout(
+                title="Training Progress",
+                xaxis_title="Epoch",
+                yaxis_title="Loss",
+                yaxis2=dict(title="Elo Rating", overlaying="y", side="right"),
             )
             return fig
 
         self.app.run_server()
 
+
 class TensorBoardLogger:
     def __init__(self):
-        self.writer = SummaryWriter(log_dir=Config.PLOTLY_LOG_DIR, comment=Config.TENSORBOARD_COMMENT)
+        self.writer = SummaryWriter(
+            log_dir=Config.PLOTLY_LOG_DIR, comment=Config.TENSORBOARD_COMMENT
+        )
 
     def log_metrics(self, metrics, epoch):
         for key, value in metrics.items():
@@ -362,6 +404,7 @@ class TensorBoardLogger:
 
     def close(self):
         self.writer.close()
+
 
 class EloRating:
     def __init__(self, initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR):
@@ -377,6 +420,7 @@ class EloRating:
         expected_score = 1 / (1 + 10 ** ((opponent_rating - self.rating) / 400))
         self.rating += self.k * (score - expected_score)
         return self.rating
+
 
 class SoundEffects:
     def __init__(self):
@@ -396,6 +440,7 @@ class SoundEffects:
     def play_capture(self):
         if self.capture_sound:
             self.capture_sound.play()
+
 
 # class Theme:
 #     def __init__(self, app):
@@ -433,6 +478,7 @@ class SoundEffects:
 #         else:
 #             self.apply_light_theme()
 #             self.current_theme = "light"
+
 
 class Timer:
     @staticmethod

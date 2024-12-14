@@ -1,10 +1,3 @@
-# chess_app/ui.py
+# chess_app/ui/__init__.py
 
-"""
-UI module for the Chess AI application.
-Contains classes and functions related to the user interface components.
-"""
-
-from .ui_board import ChessBoard
-from .ui_controls import UIControls
-from .ui_side_panel import UISidePanel
+from .main_window import MainWindow

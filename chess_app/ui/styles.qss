@@ -1,0 +1,34 @@
+/* chess_app/ui/styles.qss */
+
+QMainWindow {
+    background-color: #F5F5F7;
+}
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #CCCCCC;
+    margin-top: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 3px;
+}
+
+QLabel {
+    font-size: 14px;
+}
+
+QPushButton {
+    font-size: 14px;
+    padding: 5px;
+}
+
+QComboBox {
+    font-size: 14px;
+}
+
+QCheckBox {
+    font-size: 14px;
+}

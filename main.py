@@ -1,20 +1,55 @@
 # main.py
-import torch
-import tkinter as tk
-from tkinter import ttk, messagebox
-from chess_app.board import ChessBoard
-from chess_app.data import board_to_tensor, move_to_index, index_to_move
-from chess_app.ui.ui_side_panel import UISidePanel
-from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Timer, get_device, GameSaver, Logger, EloRating
+from chess_app.utils import Timer, SaveLoad
+from chess_app.data import board_to_tensor, move_to_index
+import sys
+from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog
+from chess_app.ui.main_window import MainWindow
+from chess_app.utils import AIPlayer, Logger, GameSaver, EloRating
 import chess
-import threading
+# main.py
+from chess_app.utils import Timer, SaveLoad
+from chess_app.data import board_to_tensor, move_to_index
+import sys
+from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QProgressBar
+from PyQt5.QtCore import QThread, pyqtSignal
+from chess_app.ui.main_window import MainWindow
+from chess_app.utils import AIPlayer, Logger, GameSaver, EloRating
+import chess
+
+
+class ModelLoaderThread(QThread):
+    """
+    A QThread to handle loading the AI model and other backend tasks.
+    """
+    model_loaded = pyqtSignal(AIPlayer)  # Signal emitted when model is loaded
+    error = pyqtSignal(str)  # Signal emitted when there's an error
+
+    def __init__(self):
+        super().__init__()
+        self.model_path = "chess_model.pth"  # Example: configurable path
+
+    def run(self):
+        try:
+            # Simulate loading the AI model
+            ai_player = AIPlayer(model_path=self.model_path, device=None, side=chess.WHITE)
+            self.model_loaded.emit(ai_player)
+        except Exception as e:
+            self.error.emit(str(e))
+
 
 class ChessApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Chess AI")
-        self.root.geometry("1200x800")  # Adequate window size
-        self.root.configure(bg="#F5F5F7")
+    def __init__(self):
+        self.board = chess.Board()
+        self.selected_square = None
+        self.dragging_piece = None
+        self.drag_start_coords = None
+        self.last_move = None
+        self.white_time = 300  # 5 minutes
+        self.black_time = 300
+        self.captured_pieces = {"white": [], "black": []}
+        self.redo_stack = []
+        self.sound_enabled = True
+        self.model_loaded = False  # Flag to indicate if the model is loaded
 
         # Initialize Logger
         self.logger_instance = Logger()
@@ -26,173 +61,54 @@ class ChessApp:
         # Initialize Elo Rating
         self.elo_rating = EloRating(initial_elo=1800, k_factor=32)
 
-        # Initialize game state
-        self.board = chess.Board()
-        self.selected_square = None
-        self.dragging_piece = None
-        self.drag_start_coords = None
-        self.last_move = None
-        self.white_time = 300  # 5 minutes
-        self.black_time = 300
-        self.white_increment = 5  # seconds
-        self.black_increment = 5
-        self.captured_pieces = {"white": [], "black": []}
-        self.redo_stack = []
+        # Initialize AIPlayer to None (load later in a thread)
+        self.ai_player = None
 
-        # Initialize sound effects
-        self.sound_effects = SoundEffects()
-        self.sound_enabled = True
-
-        # Initialize device
-        self.device = get_device()
-
-        # Initialize AIPlayer
-        self.ai_player = AIPlayer(model_path="chess_model.pth", device=self.device, side=chess.WHITE)
-
-        # Initialize training data
+        # Training data
         self.training_data = []
 
-        # Initialize UI components
-        self.create_main_layout()
-        self.create_chessboard()
-        self.create_side_panel()
-        self.create_status_bar()
+    def run(self):
+        app = QApplication(sys.argv)
 
-        # Start the clock
-        self.update_timer()
-        self.update_clock()
+        # Create the MainWindow
+        self.main_window = MainWindow(self)
 
-        # Start AI vs Stockfish game
-        self.start_ai_game()
+        # Start a thread to load the AI model
+        self.model_loader_thread = ModelLoaderThread()
+        self.model_loader_thread.model_loaded.connect(self.on_model_loaded)
+        self.model_loader_thread.error.connect(self.on_model_loading_error)
+        self.model_loader_thread.start()
 
-    def create_main_layout(self):
-        self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # Show the UI immediately
+        self.main_window.show()
 
-        # Configure grid: chessboard on left, sidebar on right
-        self.main_frame.columnconfigure(0, weight=3)
-        self.main_frame.columnconfigure(1, weight=1)
-        self.main_frame.rowconfigure(0, weight=1)
+        # Start the Qt application event loop
+        sys.exit(app.exec_())
 
-        # Chessboard Frame
-        self.board_frame = ttk.Frame(self.main_frame)
-        self.board_frame.grid(row=0, column=0, padx=10, pady=10, sticky="NSEW")
+    def on_model_loaded(self, ai_player):
+        """
+        Callback when the AI model is loaded successfully.
+        """
+        self.ai_player = ai_player
+        self.model_loaded = True  # Set the flag to indicate the model is loaded
+        self.main_window.update_status("Model loaded successfully.", color="green")
 
-        # Sidebar Frame
-        self.sidebar_frame = ttk.Frame(self.main_frame)
-        self.sidebar_frame.grid(row=0, column=1, padx=10, pady=10, sticky="NSEW")
-
-    def create_chessboard(self):
-        self.chess_board = ChessBoard(self.board_frame, self)
-        self.chess_board.pack(fill=tk.BOTH, expand=True)
-
-    def create_side_panel(self):
-        self.ui_side_panel = UISidePanel(self, self.sidebar_frame)
-
-    def create_status_bar(self):
-        self.status_bar = ttk.Label(
-            self.root,
-            text="Welcome to Chess AI!",
-            relief=tk.SUNKEN,
-            anchor=tk.W,
-            background="#F5F5F7",
-            foreground="#333333",
-            font=("Helvetica", 12)
-        )
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-    def update_status_bar(self, message):
-        self.status_bar.config(text=message)
-        self.logger.info(message)
-        self.ui_side_panel.status_label.config(text=message)
-
-    def update_timer(self):
-        timer_text = Timer.format_time(self.white_time, self.black_time)
-        self.ui_side_panel.timer_label.config(text=timer_text)
-
-    def update_clock(self):
-        if self.board.is_game_over():
-            return
-
-        if self.board.turn == chess.WHITE:
-            if self.white_time > 0:
-                self.white_time -= 1
-            else:
-                messagebox.showinfo("Time Up", "White's time is up. Black (Stockfish) wins!")
-                self.update_status_bar("Black (Stockfish) wins on time.")
-                self.board.push_san("resign")
-                self.handle_game_over()
-        else:
-            if self.black_time > 0:
-                self.black_time -= 1
-            else:
-                messagebox.showinfo("Time Up", "Black's time is up. White (AI) wins!")
-                self.update_status_bar("White (AI) wins on time.")
-                self.board.push_san("resign")
-                self.handle_game_over()
-
-        self.update_timer()
-        self.root.after(1000, self.update_clock)
-
-    def set_ai_difficulty(self, event):
-        selected_depth = int(self.ui_side_panel.difficulty_var.get())
-        if self.ai_player.engine:
-            self.ai_player.engine.configure({"Skill Level": selected_depth})
-            self.logger.info(f"AI difficulty set to depth {selected_depth}")
-        self.update_status_bar(f"AI difficulty set to level {selected_depth}")
-
-    def toggle_sound(self):
-        self.sound_enabled = self.ui_side_panel.sound_toggle_var.get()
-        self.update_status_bar(f"Sound Effects {'Enabled' if self.sound_enabled else 'Disabled'}")
-
-    def undo_move(self):
-        if len(self.board.move_stack) > 0:
-            last_move = self.board.pop()
-            self.redo_stack.append(last_move)
-            if self.board.is_capture(last_move):
-                captured_piece = self.board.piece_at(last_move.to_square)
-                if captured_piece:
-                    color = "black" if captured_piece.color else "white"
-                    self.captured_pieces[color].remove(captured_piece.symbol())
-            self.update_captured_pieces()
-            self.ui_side_panel.update_move_list_undo()
-            self.chess_board.draw_chessboard()
-            self.chess_board.draw_pieces()
-            self.update_status_bar("Move undone.")
-
-    def redo_move(self):
-        if self.redo_stack:
-            move = self.redo_stack.pop()
-            self.board.push(move)
-            if self.board.is_capture(move):
-                captured_piece = self.board.piece_at(move.to_square)
-                if captured_piece:
-                    color = "black" if captured_piece.color else "white"
-                    self.captured_pieces[color].append(captured_piece.symbol())
-            self.update_captured_pieces()
-            self.ui_side_panel.update_move_list_redo(move)
-            self.chess_board.draw_chessboard()
-            self.chess_board.draw_pieces()
-            self.update_status_bar("Move redone.")
-
-    def update_captured_pieces(self):
-        white_captured = " ".join(self.captured_pieces["white"])
-        black_captured = " ".join(self.captured_pieces["black"])
-        self.ui_side_panel.captured_pieces_white.config(text=white_captured)
-        self.ui_side_panel.captured_pieces_black.config(text=black_captured)
+    def on_model_loading_error(self, error_message):
+        """
+        Callback when there is an error loading the AI model.
+        """
+        self.main_window.update_status(f"Error loading model: {error_message}", color="red")
+        QMessageBox.critical(self.main_window, "Error", f"Failed to load the model: {error_message}")
 
     def handle_move(self, move, promotion=None):
+        if not self.model_loaded:
+            QMessageBox.warning(self.main_window, "Model Loading", "Please wait for the model to load.")
+            return
+
         if promotion:
             move.promotion = chess.Piece.from_symbol(promotion.upper()).piece_type
         if move in self.board.legal_moves:
             self.last_move = (move.from_square, move.to_square)
-
-            # Play sound
-            if self.sound_enabled:
-                if self.board.is_capture(move):
-                    self.sound_effects.play_capture()
-                else:
-                    self.sound_effects.play_move()
 
             # Handle captured pieces
             captured_piece = self.board.piece_at(move.to_square)
@@ -200,127 +116,82 @@ class ChessApp:
                 color = "black" if captured_piece.color else "white"
                 self.captured_pieces[color].append(captured_piece.symbol())
 
-            # Generate SAN for move list
-            try:
-                move_san = self.board.san(move)
-            except ValueError:
-                move_san = str(move)
-
+            # Update move list
+            move_san = self.board.san(move)
             self.board.push(move)
-            self.update_captured_pieces()
-            self.ui_side_panel.update_move_list(move_san)
+            self.main_window.side_panel.update_move_list(move_san)
 
-            # Apply increment
-            if self.board.turn == chess.BLACK:
-                self.white_time += self.white_increment
-            else:
-                self.black_time += self.black_increment
-
-            self.update_timer()
-            self.chess_board.draw_chessboard()
-            self.chess_board.draw_pieces()
-
-            self.update_status_bar("Move made successfully.")
+            # Update captured pieces display
+            self.main_window.side_panel.update_captured_pieces(
+                self.captured_pieces["white"], self.captured_pieces["black"]
+            )
 
             # Collect training data
             self.collect_training_data(move)
 
-            if not self.board.is_game_over():
-                # Fetch and display predictions (optional)
-                predictions = self.get_probable_future_predictions()
-                self.ui_side_panel.show_predictions(predictions)
-
+            # Check for game over
+            if self.board.is_game_over():
+                self.handle_game_over()
+            else:
                 # AI's turn
                 if self.board.turn == self.ai_player.side:
                     self.handle_ai_move()
 
-    def collect_training_data(self, move):
-        board_tensor = board_to_tensor(self.board).numpy()
-        move_index = move_to_index(move)
-        move_quality = "Average Step"  # Placeholder, can be improved
-        self.training_data.append((board_tensor, move_index, 0.0, move_quality))  # Outcome to be set later
-
     def handle_ai_move(self):
-        def ai_move_thread():
-            move = self.ai_player.get_best_move(self.board)
-            if move:
-                self.root.after(0, self.execute_ai_move, move)
+        if not self.model_loaded:
+            return
 
-        threading.Thread(target=ai_move_thread).start()
-
-    def execute_ai_move(self, ai_move):
-        try:
-            move_san = self.board.san(ai_move)
-        except ValueError:
-            move_san = str(ai_move)
-
-        self.board.push(ai_move)
-        self.last_move = (ai_move.from_square, ai_move.to_square)
-
-        # Play sound
-        if self.sound_enabled:
-            if self.board.is_capture(ai_move):
-                self.sound_effects.play_capture()
-            else:
-                self.sound_effects.play_move()
-
-        # Handle captured pieces
-        captured_piece = self.board.piece_at(ai_move.to_square)
-        if captured_piece:
-            color = "black" if captured_piece.color else "white"
-            self.captured_pieces[color].append(captured_piece.symbol())
-
-        self.update_captured_pieces()
-        self.ui_side_panel.update_move_list(move_san)
-        self.chess_board.draw_chessboard()
-        self.chess_board.draw_pieces()
-        self.update_status_bar("AI made its move.")
-
-        # Collect training data
-        self.collect_training_data(ai_move)
-
-        if self.board.is_game_over():
-            self.handle_game_over()
-
+        move = self.ai_player.get_best_move(self.board)
+        if move:
+            self.handle_move(move)
     def handle_game_over(self):
         outcome = self.board.outcome()
-        if outcome:
-            result = outcome.result()
-            if result == "1-0":
-                messagebox.showinfo("Game Over", "White (AI) wins!")
-                self.update_status_bar("AI (White) wins!")
-                self.elo_rating.update(opponent_rating=1500, score=1.0)
-            elif result == "0-1":
-                messagebox.showinfo("Game Over", "Black (Stockfish) wins!")
-                self.update_status_bar("Stockfish (Black) wins!")
-                self.elo_rating.update(opponent_rating=1500, score=0.0)
-            else:
-                messagebox.showinfo("Game Over", "It's a draw!")
-                self.update_status_bar("Draw!")
-                self.elo_rating.update(opponent_rating=1500, score=0.5)
+        if outcome.winner is None:
+            result_text = "It's a draw!"
+            self.main_window.side_panel.update_status(result_text, color="blue")
+            self.elo_rating.update(opponent_rating=1500, score=0.5)
+        elif outcome.winner == self.ai_player.side:
+            result_text = "White (AI) wins!"
+            self.main_window.side_panel.update_status(result_text, color="green")
+            self.elo_rating.update(opponent_rating=1500, score=1.0)
+        else:
+            result_text = "Black (Stockfish) wins!"
+            self.main_window.side_panel.update_status(result_text, color="red")
+            self.elo_rating.update(opponent_rating=1500, score=0.0)
 
         # Save the game
         self.game_saver.save_game(self.board)
 
-        # Update training data outcomes
-        outcome_val = 0.5  # Default for draw
-        if outcome.winner is not None:
-            outcome_val = 1.0 if outcome.winner == self.ai_player.side else 0.0
+        # Log the outcome
+        self.logger.info(
+            f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}"
+        )
 
-        for idx in range(len(self.training_data)):
-            board_tensor, move_index, _, move_quality = self.training_data[idx]
-            self.training_data[idx] = (board_tensor, move_index, outcome_val, move_quality)
+    def collect_training_data(self, move):
+        board_tensor = board_to_tensor(self.board).numpy()
+        move_index = move_to_index(move)
+        move_quality = "Average Step"  # Placeholder
+        self.training_data.append(
+            (board_tensor, move_index, 0.0, move_quality)
+        )  # Outcome to be set later
 
     def save_game(self):
-        filename = tk.filedialog.asksaveasfilename(defaultextension=".pgn",
-                                                 filetypes=[("PGN Files", "*.pgn")])
+        filename, _ = QFileDialog.getSaveFileName(
+            self.main_window, "Save Game", "", "PGN Files (*.pgn)"
+        )
         if filename:
-            SaveLoad.save_game(self.board, filename)
-            messagebox.showinfo("Game Saved", "The game has been saved successfully.")
-            self.update_status_bar("Game saved successfully.")
+            self.game_saver.save_game(self.board)
+            QMessageBox.information(
+                self.main_window, "Game Saved", "The game has been saved successfully."
+            )
+            self.main_window.side_panel.update_status(
+                "Game saved successfully.", color="green"
+            )
 
     def load_game(self):
-        filename = tk.filedialog.askopenfilename(filetypes=[("PGN Files", "*.pgn")])
+        filename, _ = QFileDialog.getOpenFileName(
+            self.main_window, "Load Game", "", "PGN Files (*.pgn)"
+        )
         if filename:
             try:
                 self.board = SaveLoad.load_game(filename)
@@ -329,37 +200,106 @@ class ChessApp:
                 self.black_time = 300
                 self.captured_pieces = {"white": [], "black": []}
                 self.redo_stack = []
-                self.update_captured_pieces()
-                self.ui_side_panel.move_list.config(state=tk.NORMAL)
-                self.ui_side_panel.move_list.delete(1.0, tk.END)
-                self.ui_side_panel.move_list.config(state=tk.DISABLED)
-                self.update_timer()
-                self.chess_board.draw_chessboard()
-                self.chess_board.draw_pieces()
-                messagebox.showinfo("Game Loaded", "The game has been loaded successfully.")
-                self.update_status_bar("Game loaded successfully.")
+                self.main_window.side_panel.update_captured_pieces(
+                    self.captured_pieces["white"], self.captured_pieces["black"]
+                )
+                self.main_window.side_panel.move_list.setPlainText("")
+                self.main_window.side_panel.update_timer("White: 05:00 - Black: 05:00")
+                self.main_window.chessboard.board = self.board
+                self.main_window.chessboard.update()
+                QMessageBox.information(
+                    self.main_window,
+                    "Game Loaded",
+                    "The game has been loaded successfully.",
+                )
+                self.main_window.side_panel.update_status(
+                    "Game loaded successfully.", color="green"
+                )
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to load game: {e}")
-                self.update_status_bar("Error: Failed to load game.")
+                QMessageBox.critical(
+                    self.main_window, "Error", f"Failed to load game: {e}"
+                )
+                self.main_window.side_panel.update_status(
+                    "Error: Failed to load game.", color="red"
+                )
 
     def resign(self):
         if self.board.turn == chess.WHITE:
-            # It's White's turn, so White is resigning
-            messagebox.showinfo("Game Over", "White (AI) resigns. Black (Stockfish) wins!")
-            self.update_status_bar("White (AI) resigned. Black (Stockfish) wins!")
+            # AI resigns
+            QMessageBox.information(
+                self.main_window,
+                "Resign",
+                "White (AI) resigns. Black (Stockfish) wins!",
+            )
+            self.app.handle_resignation(chess.WHITE)
         else:
-            # It's Black's turn, so Black is resigning
-            messagebox.showinfo("Game Over", "Black (Stockfish) resigns. White (AI) wins!")
-            self.update_status_bar("Black (Stockfish) resigned. White (AI) wins!")
-        self.board.push_san("resign")
-        self.handle_game_over()
+            # Stockfish resigns
+            QMessageBox.information(
+                self.main_window,
+                "Resign",
+                "Black (Stockfish) resigns. White (AI) wins!",
+            )
+            self.app.handle_resignation(chess.BLACK)
 
     def offer_draw(self):
-        response = messagebox.askyesno("Offer Draw", "Do you want to offer a draw?")
-        if response:
-            messagebox.showinfo("Draw Offered", "Draw offered to the opponent.")
-            self.update_status_bar("Draw offered.")
+        response = QMessageBox.question(
+            self.main_window,
+            "Offer Draw",
+            "Do you want to offer a draw?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if response == QMessageBox.Yes:
+            QMessageBox.information(
+                self.main_window, "Draw Offered", "Draw offered to the opponent."
+            )
+            self.main_window.side_panel.update_status("Draw offered.", color="blue")
             # Implement opponent's response logic if applicable
+
+    def undo_move(self):
+        if len(self.board.move_stack) > 0:
+            last_move = self.board.pop()
+            self.redo_stack.append(last_move)
+            if last_move.to_square is not None:
+                captured_piece = self.board.piece_at(last_move.to_square)
+                if captured_piece:
+                    if captured_piece.color:
+                        self.captured_pieces["black"].remove(captured_piece.symbol())
+                    else:
+                        self.captured_pieces["white"].remove(captured_piece.symbol())
+            self.last_move = None
+            self.main_window.side_panel.update_timer(
+                Timer.format_time(self.white_time, self.black_time)
+            )
+            self.main_window.chessboard.draw_chessboard()
+            self.main_window.chessboard.draw_pieces()
+            self.main_window.side_panel.update_captured_pieces(
+                self.captured_pieces["white"], self.captured_pieces["black"]
+            )
+            self.main_window.side_panel.update_move_list_undo()
+            self.main_window.side_panel.update_status("Move undone.")
+
+    def redo_move(self):
+        if self.redo_stack:
+            move = self.redo_stack.pop()
+            self.board.push(move)
+            if self.board.is_capture(move):
+                captured_piece = self.board.piece_at(move.to_square)
+                if captured_piece:
+                    if captured_piece.color:
+                        self.captured_pieces["black"].append(captured_piece.symbol())
+                    else:
+                        self.captured_pieces["white"].append(captured_piece.symbol())
+            self.last_move = (move.from_square, move.to_square)
+            self.main_window.side_panel.update_timer(
+                Timer.format_time(self.white_time, self.black_time)
+            )
+            self.main_window.chessboard.draw_chessboard()
+            self.main_window.chessboard.draw_pieces()
+            self.main_window.side_panel.update_captured_pieces(
+                self.captured_pieces["white"], self.captured_pieces["black"]
+            )
+            self.main_window.side_panel.update_move_list_redo(move)
+            self.main_window.side_panel.update_status("Move redone.")
 
     def restart_game(self):
         self.board.reset()
@@ -368,133 +308,92 @@ class ChessApp:
         self.black_time = 300
         self.captured_pieces = {"white": [], "black": []}
         self.redo_stack = []
-        self.update_captured_pieces()
-        self.ui_side_panel.move_list.config(state=tk.NORMAL)
-        self.ui_side_panel.move_list.delete(1.0, tk.END)
-        self.ui_side_panel.move_list.config(state=tk.DISABLED)
-        self.update_timer()
-        self.chess_board.draw_chessboard()
-        self.chess_board.draw_pieces()
-        self.update_status_bar("Game restarted.")
         self.training_data = []
+        self.main_window.side_panel.update_captured_pieces(
+            self.captured_pieces["white"], self.captured_pieces["black"]
+        )
+        self.main_window.side_panel.move_list.setPlainText("")
+        self.main_window.side_panel.update_timer("White: 05:00 - Black: 05:00")
+        self.main_window.chessboard.board = self.board
+        self.main_window.chessboard.update()
+        self.main_window.side_panel.update_status("Game restarted.", color="green")
 
-    def analyze_position(self):
-        self.update_status_bar("Analyzing position...")
-        best_move = self.ai_player.get_best_move(self.board)
-        if best_move:
-            from_square = best_move.from_square
-            to_square = best_move.to_square
-            self.chess_board.highlight_square(from_square, "#00FF00")  # Green
-            self.chess_board.highlight_square(to_square, "#00FF00")
-            self.update_status_bar(f"Suggested Move: {self.board.san(best_move)}")
-        else:
-            self.update_status_bar("No suggestion available.")
+    def set_ai_difficulty(self, difficulty_level):
+        self.ai_player.set_difficulty(difficulty_level)
+        self.main_window.side_panel.update_status(
+            f"AI difficulty set to level {difficulty_level}.", color="green"
+        )
+
+    def toggle_sound(self, enabled):
+        self.sound_enabled = enabled
+        self.main_window.side_panel.update_status(
+            f"Sound Effects {'Enabled' if enabled else 'Disabled'}.", color="green"
+        )
 
     def show_hint(self):
-        self.update_status_bar("Fetching hint...")
         best_move = self.ai_player.get_best_move(self.board)
         if best_move:
-            from_square = best_move.from_square
-            to_square = best_move.to_square
-            self.chess_board.highlight_square(from_square, "#FFD700")  # Gold
-            self.chess_board.highlight_square(to_square, "#FFD700")
-            self.update_status_bar(f"Hint: {self.board.san(best_move)}")
+            move_san = self.board.san(best_move)
+            QMessageBox.information(
+                self.main_window, "Hint", f"Suggested Move: {move_san}"
+            )
+            self.main_window.side_panel.update_status(f"Hint: {move_san}", color="blue")
         else:
-            self.update_status_bar("No hint available.")
+            QMessageBox.warning(self.main_window, "Hint", "No hint available.")
+            self.main_window.side_panel.update_status("No hint available.", color="red")
+
+    def analyze_position(self):
+        # Placeholder for position analysis
+        QMessageBox.information(
+            self.main_window,
+            "Analyze Position",
+            "Position analysis feature is under development.",
+        )
+        self.main_window.side_panel.update_status(
+            "Position analysis feature is under development.", color="blue"
+        )
 
     def analyze_game(self):
-        analyzer = GameAnalyzer(engine_path="/path/to/stockfish", depth=3)  # Update engine path
-        analysis = analyzer.analyze_game(self.board)
-        analyzer.close()
+        # Placeholder for game analysis
+        QMessageBox.information(
+            self.main_window,
+            "Analyze Game",
+            "Game analysis feature is under development.",
+        )
+        self.main_window.side_panel.update_status(
+            "Game analysis feature is under development.", color="blue"
+        )
 
-        analysis_window = tk.Toplevel(self.root)
-        analysis_window.title("Game Analysis")
-        analysis_window.geometry("500x600")
+    def toggle_theme(self):
+        # Placeholder for theme toggling
+        QMessageBox.information(
+            self.main_window,
+            "Toggle Theme",
+            "Theme toggling feature is under development.",
+        )
+        self.main_window.side_panel.update_status(
+            "Theme toggling feature is under development.", color="blue"
+        )
 
-        scroll = scrolledtext.ScrolledText(analysis_window, wrap=tk.WORD, font=("Helvetica", 12))
-        scroll.pack(expand=True, fill='both')
-
-        for move, eval_score in analysis:
-            try:
-                move_san = self.board.san(move)
-            except ValueError:
-                move_san = str(move)
-            eval_text = f"Move: {move_san}, Evaluation: {eval_score}"
-            scroll.insert(tk.END, eval_text + "\n")
-
-        scroll.config(state=tk.DISABLED)
-        self.update_status_bar("Game analysis completed.")
-
-
-    def get_probable_future_predictions(self, top_n=5):
-        """
-        Returns the top_n probable moves and their win probabilities.
-        """
-        model = self.ai_player.model
-        device = self.ai_player.device
-        if model is None:
-            return []
-
-        board_tensor = board_to_tensor(self.board).to(device)
-        with torch.no_grad():
-            policy, value = model(board_tensor.unsqueeze(0))  # Add batch dimension
-        move_probs = torch.exp(policy).cpu().numpy()[0]
-        top_move_indices = move_probs.argsort()[-top_n:][::-1]
-        predictions = []
-
-        for idx in top_move_indices:
-            move = index_to_move(idx, self.board)
-            if move in self.board.legal_moves:
-                # Apply the move to a copy of the board
-                temp_board = self.board.copy(stack=False)
-                temp_board.push(move)
-                # Get the value estimation from the model
-                temp_board_tensor = board_to_tensor(temp_board).to(device)
-                with torch.no_grad():
-                    _, temp_value = model(temp_board_tensor.unsqueeze(0))
-                win_prob = (temp_value.item() + 1) / 2  # Convert tanh output to [0,1]
-                predictions.append((move, win_prob))
-
-        return predictions
-
-    def start_ai_game(self):
-        threading.Thread(target=self.play_ai_vs_stockfish_game, daemon=True).start()
-
-    def play_ai_vs_stockfish_game(self):
-        self.board.reset()
-        self.update_captured_pieces()
-        self.ui_side_panel.move_list.config(state=tk.NORMAL)
-        self.ui_side_panel.move_list.delete(1.0, tk.END)
-        self.ui_side_panel.move_list.config(state=tk.DISABLED)
-        self.white_time = 300
-        self.black_time = 300
-        self.update_timer()
-        self.chess_board.draw_chessboard()
-        self.chess_board.draw_pieces()
-        self.update_status_bar("Starting AI vs Stockfish game.")
-
-        self.training_data = []
-
-        self.schedule_next_move()
-
-    def schedule_next_move(self):
-        if not self.board.is_game_over():
-            if self.board.turn == self.ai_player.side:
-                move = self.ai_player.get_best_move(self.board)
-                self.handle_move(move)
-            else:
-                move = self.ai_player.get_best_move(self.board)
-                self.handle_move(move)
-            self.root.after(1000, self.schedule_next_move)  # Adjust delay as needed
+    def handle_resignation(self, resigning_player):
+        if resigning_player == chess.WHITE:
+            result_text = "White (AI) resigns. Black (Stockfish) wins!"
+            self.main_window.side_panel.update_status(result_text, color="red")
+            self.elo_rating.update(opponent_rating=1500, score=0.0)
         else:
-            self.handle_game_over()
-            outcome = self.board.outcome()
-            outcome_val = 0.5
-            if outcome.winner is not None:
-                outcome_val = 1.0 if outcome.winner == self.ai_player.side else 0.0
-            self.logger.info(f"Game finished with outcome: {outcome_val}. ELO: {self.elo_rating.rating:.0f}")
+            result_text = "Black (Stockfish) resigns. White (AI) wins!"
+            self.main_window.side_panel.update_status(result_text, color="green")
+            self.elo_rating.update(opponent_rating=1500, score=1.0)
+
+        # Save the game
+        self.game_saver.save_game(self.board)
+
+        # Log the outcome
+        self.logger.info(
+            f"Game over: {result_text}. ELO Rating: {self.elo_rating.rating:.0f}"
+        )
+
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = ChessApp(root)
-    root.mainloop()
+    app_instance = ChessApp()
+    app_instance.run()

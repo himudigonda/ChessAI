@@ -5,6 +5,7 @@ import chess
 import numpy as np
 import torch
 
+
 def board_to_tensor(board):
     """
     Converts a chess.Board object to a 17x8x8 tensor.
@@ -17,8 +18,18 @@ def board_to_tensor(board):
     tensor = np.zeros((17, 8, 8), dtype=np.float32)  # 17 channels
 
     piece_dict = {
-        'P': 0, 'N': 1, 'B': 2, 'R': 3, 'Q': 4, 'K': 5,
-        'p': 6, 'n': 7, 'b': 8, 'r': 9, 'q': 10, 'k': 11
+        "P": 0,
+        "N": 1,
+        "B": 2,
+        "R": 3,
+        "Q": 4,
+        "K": 5,
+        "p": 6,
+        "n": 7,
+        "b": 8,
+        "r": 9,
+        "q": 10,
+        "k": 11,
     }
 
     for square, piece in piece_map.items():
@@ -42,6 +53,7 @@ def board_to_tensor(board):
 
     return torch.from_numpy(tensor).float()
 
+
 def move_to_index(move):
     """
     Encodes a move into a unique index.
@@ -51,6 +63,7 @@ def move_to_index(move):
     :return: Integer index representing the move.
     """
     return move.from_square * 73 + move.to_square
+
 
 def index_to_move(index, board):
     """
@@ -63,7 +76,9 @@ def index_to_move(index, board):
     """
     from_square = index // 73
     to_square = index % 73
-    possible_moves = [move for move in board.legal_moves if move.from_square == from_square]
+    possible_moves = [
+        move for move in board.legal_moves if move.from_square == from_square
+    ]
     for move in possible_moves:
         if move.to_square == to_square:
             return move
@@ -73,6 +88,7 @@ def index_to_move(index, board):
             return move
     # If still not found, return a random legal move
     return random.choice(list(board.legal_moves))
+
 
 class ChessDatasetTrain(torch.utils.data.Dataset):
     """
@@ -99,7 +115,14 @@ class ChessDatasetTrain(torch.utils.data.Dataset):
             "Good Step": 3,
             "Average Step": 2,
             "Bad Step": 1,
-            "Blunder": 0
+            "Blunder": 0,
         }
-        move_quality_encoded = move_quality_mapping.get(move_quality, 2)  # Default to "Average Step"
-        return torch.tensor(board, dtype=torch.float32), torch.tensor(move, dtype=torch.long), torch.tensor(outcome, dtype=torch.float32), torch.tensor(move_quality_encoded, dtype=torch.long)
+        move_quality_encoded = move_quality_mapping.get(
+            move_quality, 2
+        )  # Default to "Average Step"
+        return (
+            torch.tensor(board, dtype=torch.float32),
+            torch.tensor(move, dtype=torch.long),
+            torch.tensor(outcome, dtype=torch.float32),
+            torch.tensor(move_quality_encoded, dtype=torch.long),
+        )

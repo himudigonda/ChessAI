@@ -6,6 +6,7 @@ from chess_app.utils import Timer, SoundEffects
 import chess
 import os
 
+
 class ChessBoard(tk.Canvas):
     """
     ChessBoard is a Tkinter Canvas that displays the chessboard and pieces.
@@ -140,9 +141,7 @@ class ChessBoard(tk.Canvas):
         y1 = row * self.square_size
         x2 = x1 + self.square_size
         y2 = y1 + self.square_size
-        self.create_rectangle(
-            x1, y1, x2, y2, outline=color, width=3, tags="highlight"
-        )
+        self.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags="highlight")
 
     def highlight_legal_moves(self):
         """

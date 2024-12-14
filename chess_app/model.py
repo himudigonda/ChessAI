@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class ResidualBlock(nn.Module):
     """
     Defines a Residual Block for the neural network.
@@ -36,6 +37,7 @@ class ResidualBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
 class ChessNet(nn.Module):
     """
     Neural network model for the Chess AI.
@@ -54,7 +56,9 @@ class ChessNet(nn.Module):
         self.board_size = board_size
         self.num_channels = num_channels
 
-        self.conv1 = nn.Conv2d(in_channels=self.num_channels, out_channels=512, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(
+            in_channels=self.num_channels, out_channels=512, kernel_size=3, padding=1
+        )
         self.bn1 = nn.BatchNorm2d(512)
         self.relu = nn.ReLU(inplace=True)
 
@@ -70,7 +74,9 @@ class ChessNet(nn.Module):
         self.policy_conv = nn.Conv2d(512, 256, 1)
         self.policy_bn = nn.BatchNorm2d(256)
         self.policy_relu = nn.ReLU(inplace=True)
-        self.policy_fc = nn.Linear(256 * board_size * board_size, board_size * board_size * 73)
+        self.policy_fc = nn.Linear(
+            256 * board_size * board_size, board_size * board_size * 73
+        )
 
         # Value head
         self.value_conv = nn.Conv2d(512, 256, 1)
@@ -94,11 +100,17 @@ class ChessNet(nn.Module):
         # Reshape for attention: (sequence_length, batch, embedding_dim)
         batch_size, channels, height, width = x.size()
         x_reshaped = x.view(batch_size, channels, height * width)
-        x_reshaped = x_reshaped.permute(2, 0, 1)  # (sequence_length, batch, embedding_dim)
+        x_reshaped = x_reshaped.permute(
+            2, 0, 1
+        )  # (sequence_length, batch, embedding_dim)
 
         # Apply self-attention
         attn_output, _ = self.attention(x_reshaped, x_reshaped, x_reshaped)
-        attn_output = attn_output.permute(1, 2, 0).contiguous().view(batch_size, channels, height, width)
+        attn_output = (
+            attn_output.permute(1, 2, 0)
+            .contiguous()
+            .view(batch_size, channels, height, width)
+        )
 
         # Policy head
         p = self.policy_relu(self.policy_bn(self.policy_conv(attn_output)))
@@ -138,6 +150,7 @@ class ChessNet(nn.Module):
         else:
             return "Blunder"
 
+
 def load_model(model, path, device):
     """
     Load model weights from a file and move to the specified device.
@@ -151,6 +164,7 @@ def load_model(model, path, device):
     model.to(device)
     model.eval()
     print(f"Model loaded from {path}")
+
 
 def save_model(model, path):
     """
