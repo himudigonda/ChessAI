@@ -1,109 +1,110 @@
 # chess_app/ui/side_panel.py
 
-from PyQt5.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QTextEdit,
-    QListWidget,
-    QListWidgetItem,
-    QGroupBox,
-    QHBoxLayout,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QTextEdit,
-    QGroupBox,
-)
-from PyQt5.QtCore import Qt
+import tkinter as tk
+from tkinter import ttk
+from .styles import Styles
 
 
+class SidePanel(tk.Frame):
+    def __init__(self, parent, app, **kwargs):
+        """
+        Initializes the SidePanel.
 
-class SidePanel(QWidget):
-    def __init__(self, app_instance):
-        super().__init__()
-        self.app = app_instance
-        self.init_ui()
+        :param parent: The parent Tkinter widget.
+        :param app: The main ChessApp instance.
+        :param kwargs: Additional keyword arguments for Frame.
+        """
+        super().__init__(parent, bg=Styles.CURRENT_THEME["background"], **kwargs)
+        self.app = app
+        self.captured_white = []
+        self.captured_black = []
+        self.create_widgets()
 
-    def init_ui(self):
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+    def create_widgets(self):
+        """
+        Creates and places all widgets in the side panel.
+        """
+        # Title
+        title = tk.Label(self, text="Game Info", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 16, "bold"))
+        title.pack(pady=10)
 
         # Timer Display
-        self.timer_label = QLabel("White: 05:00 - Black: 05:00")
-        self.timer_label.setAlignment(Qt.AlignCenter)
-        self.timer_label.setStyleSheet("font-size: 16px;")
-        layout.addWidget(self.timer_label)
+        self.timer_label = tk.Label(self, text="White: 05:00 - Black: 05:00", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 14))
+        self.timer_label.pack(pady=5)
 
-        # Status Label
-        self.status_label = QLabel("Status: White (AI) to move")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 14px; color: green;")
-        layout.addWidget(self.status_label)
+        # Status Message
+        self.status_label = tk.Label(self, text="Welcome to Chess AI!", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["status_info"], font=("Helvetica", 12))
+        self.status_label.pack(pady=5)
 
         # Captured Pieces
-        captured_group = QGroupBox("Captured Pieces")
-        captured_layout = QVBoxLayout()
-        captured_group.setLayout(captured_layout)
+        captured_group = tk.LabelFrame(self, text="Captured Pieces", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        captured_group.pack(fill="x", padx=10, pady=5)
 
-        self.captured_white_label = QLabel("White:")
-        captured_layout.addWidget(self.captured_white_label)
+        lbl_white = tk.Label(captured_group, text="White:", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        lbl_white.pack(anchor="w", padx=5)
 
-        self.captured_white_pieces = QLabel("")
-        captured_layout.addWidget(self.captured_white_pieces)
+        self.captured_white_label = tk.Label(captured_group, text="", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.captured_white_label.pack(anchor="w", padx=20)
 
-        self.captured_black_label = QLabel("Black:")
-        captured_layout.addWidget(self.captured_black_label)
+        lbl_black = tk.Label(captured_group, text="Black:", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        lbl_black.pack(anchor="w", padx=5)
 
-        self.captured_black_pieces = QLabel("")
-        captured_layout.addWidget(self.captured_black_pieces)
-
-        layout.addWidget(captured_group)
+        self.captured_black_label = tk.Label(captured_group, text="", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.captured_black_label.pack(anchor="w", padx=20)
 
         # Move List
-        move_list_group = QGroupBox("Move List")
-        move_list_layout = QVBoxLayout()
-        move_list_group.setLayout(move_list_layout)
+        move_list_group = tk.LabelFrame(self, text="Move List", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        move_list_group.pack(fill="both", expand=True, padx=10, pady=5)
 
-        self.move_list = QTextEdit()
-        self.move_list.setReadOnly(True)
-        move_list_layout.addWidget(self.move_list)
+        self.move_list = tk.Text(move_list_group, height=15, state="disabled", bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        self.move_list.pack(fill="both", expand=True, padx=5, pady=5)
 
-        layout.addWidget(move_list_group)
-        layout.addStretch()
+    def update_timer(self, timer_text):
+        self.timer_label.config(text=timer_text)
+
+    def update_status(self, message, color="green"):
+        self.status_label.config(text=message, fg=Styles.CURRENT_THEME["status_info"])
+        if color == "green":
+            self.status_label.config(fg=Styles.CURRENT_THEME["status_success"])
+        elif color == "red":
+            self.status_label.config(fg=Styles.CURRENT_THEME["status_error"])
+        elif color == "blue":
+            self.status_label.config(fg=Styles.CURRENT_THEME["status_info"])
 
     def update_move_list(self, move_san):
-        current_text = self.move_list.toPlainText().strip()
+        self.move_list.config(state="normal")
+        current_text = self.move_list.get("1.0", tk.END).strip()
         if current_text:
-            last_line = current_text.split("\n")[-1]
-            if len(last_line.split()) == 2:
-                self.move_list.append(f"{last_line.split()[0]} {last_line.split()[1]} {move_san}")
-            else:
-                move_number = current_text.count('\n') + 1
-                self.move_list.append(f"{move_number}. {move_san}")
+            last_move_num = current_text.count('\n') + 1
+            self.move_list.insert(tk.END, f"{last_move_num}. {move_san}\n")
         else:
-            self.move_list.append(f"1. {move_san}")
-    
-    def update_timer(self, timer_text):
-        self.timer_label.setText(timer_text)
-
-    def update_status(self, status_text, color="green"):
-        self.status_label.setText(f"Status: {status_text}")
-        self.status_label.setStyleSheet(f"font-size: 14px; color: {color};")
+            self.move_list.insert(tk.END, f"1. {move_san}\n")
+        self.move_list.config(state="disabled")
+        self.move_list.see(tk.END)
 
     def update_captured_pieces(self, white_pieces, black_pieces):
-        self.captured_white_pieces.setText(" ".join(white_pieces))
-        self.captured_black_pieces.setText(" ".join(black_pieces))
+        self.captured_white_label.config(text=" ".join(white_pieces))
+        self.captured_black_label.config(text=" ".join(black_pieces))
 
-
-    def update_move_list_undo(self):
-        current_text = self.move_list.toPlainText().strip().split("\n")
+    def undo_move(self):
+        # Implement undo move in move list
+        current_text = self.move_list.get("1.0", tk.END).strip().split('\n')
         if current_text:
             current_text.pop()
-            self.move_list.setText("\n".join(current_text))
+            self.move_list.config(state="normal")
+            self.move_list.delete("1.0", tk.END)
+            for line in current_text:
+                self.move_list.insert(tk.END, f"{line}\n")
+            self.move_list.config(state="disabled")
+            self.move_list.see(tk.END)
 
-    def update_predictions(self, predictions):
-        self.predictions_list.clear()
-        for move, prob in predictions:
-            item = QListWidgetItem(f"{move}: {prob * 100:.2f}% Win")
-            self.predictions_list.addItem(item)
+    def redo_move(self, move_san):
+        self.move_list.config(state="normal")
+        current_text = self.move_list.get("1.0", tk.END).strip()
+        if current_text:
+            last_move_num = current_text.count('\n') + 1
+            self.move_list.insert(tk.END, f"{last_move_num}. {move_san}\n")
+        else:
+            self.move_list.insert(tk.END, f"1. {move_san}\n")
+        self.move_list.config(state="disabled")
+        self.move_list.see(tk.END)

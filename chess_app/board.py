@@ -40,10 +40,6 @@ class ChessBoard(tk.Canvas):
         self.drag_start_coords = None
 
     def load_piece_images(self):
-        """
-        Loads chess piece images from the assets directory.
-        The images should be named according to the piece symbols (e.g., White_pawn.png).
-        """
         piece_filenames = {
             "P": "White_pawn.png",
             "N": "White_knight.png",
@@ -58,17 +54,22 @@ class ChessBoard(tk.Canvas):
             "q": "Black_queen.png",
             "k": "Black_king.png",
         }
-        # Determine the path to the assets directory relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         assets_path = os.path.join(current_dir, "..", "assets")
 
         for piece, filename in piece_filenames.items():
             file_path = os.path.join(assets_path, filename)
             try:
-                self.piece_images[piece] = tk.PhotoImage(file=file_path)
-            except tk.TclError:
-                print(f"Error: Missing file {file_path}")
-                self.piece_images[piece] = None  # Placeholder for missing images
+                image = Image.open(file_path).convert("RGBA")
+                image = image.resize(
+                    (self.square_size - 10, self.square_size - 10), Image.LANCZOS
+                )
+                background = Image.new("RGBA", image.size, (255, 255, 255, 0))
+                combined = Image.alpha_composite(background, image)
+                self.piece_images[piece] = ImageTk.PhotoImage(combined)
+            except Exception as e:
+                print(f"Error loading image {file_path}: {e}")
+                self.piece_images[piece] = None
 
     def on_canvas_resize(self, event):
         """

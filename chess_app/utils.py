@@ -1,27 +1,27 @@
 # chess_app/utils.py
 
-import torch
+
+from chess_app.config import Config
+from chess_app.data import board_to_tensor, move_to_index, index_to_move
+from chess_app.model import ChessNet, load_model, save_model
+from sklearn.linear_model import LinearRegression
+from tkinter import messagebox
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm  # For progress bars
 import chess.engine
 import chess.pgn
-from chess_app.model import ChessNet, load_model, save_model
-from chess_app.data import board_to_tensor, move_to_index, index_to_move
-import torch.optim as optim
-import torch.nn as nn
-import random
-import os
-import threading
-from tqdm import tqdm  # For progress bars
 import json
+import logging
+import numpy as np
+import os
 import pygame
+import random
+import threading
 import time
 import tkinter as tk
-from tkinter import messagebox
-import logging
-from chess_app.config import Config
-from torch.utils.tensorboard import SummaryWriter
-from sklearn.linear_model import LinearRegression
-import numpy as np
-
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 def get_device():
     """
@@ -421,13 +421,15 @@ class EloRating:
         self.rating += self.k * (score - expected_score)
         return self.rating
 
-
 class SoundEffects:
     def __init__(self):
         pygame.mixer.init()
+        assets_path = os.path.join(os.path.dirname(__file__), "..", "assets", "sounds")
+        move_sound_path = os.path.join(assets_path, "move.mp3")
+        capture_sound_path = os.path.join(assets_path, "capture.mp3")
         try:
-            self.move_sound = pygame.mixer.Sound("assets/sounds/move.mp3")
-            self.capture_sound = pygame.mixer.Sound("assets/sounds/capture.mp3")
+            self.move_sound = pygame.mixer.Sound(move_sound_path) if os.path.exists(move_sound_path) else None
+            self.capture_sound = pygame.mixer.Sound(capture_sound_path) if os.path.exists(capture_sound_path) else None
         except pygame.error as e:
             print(f"Error loading sound files: {e}")
             self.move_sound = None

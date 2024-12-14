@@ -1,119 +1,78 @@
 # chess_app/ui/main_window.py
-import chess
-from PyQt5.QtWidgets import (
-        QMainWindow,
-    QComboBox,
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QProgressBar,
-    QPushButton,
-    QPushButton,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+
+import tkinter as tk
 from .chessboard_widget import ChessBoardWidget
 from .control_panel import ControlPanel
 from .side_panel import SidePanel
-from chess_app.utils import AIPlayer, Logger, GameSaver, EloRating
-from PyQt5.QtCore import Qt, QTimer
-import chess
+from .status_bar import StatusBar
+from .styles import Styles
 
 
-class MainWindow(QMainWindow):
-    def __init__(self, app_instance):
+class MainWindow(tk.Tk):
+    def __init__(self, app):
+        """
+        Initializes the MainWindow.
+
+        :param app: The main ChessApp instance.
+        """
         super().__init__()
-        self.app = app_instance
-        self.setWindowTitle("Chess AI")
-        self.setGeometry(100, 100, 900, 700)  # Adjust the window size
-        self.setMinimumSize(900, 700)
-        # Central Widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        self.app = app
+        self.title("Chess AI")
+        self.geometry("1200x800")
+        self.configure(bg=Styles.CURRENT_THEME["background"])
 
-        # Main Layout
-        main_layout = QHBoxLayout()
-        central_widget.setLayout(main_layout)
+        # Create main frames
+        self.create_widgets()
 
-        # Chessboard Widget
-        self.chessboard = ChessBoardWidget(self.app)
-        # main_layout.addWidget(self.chessboard, stretch=3)
-        main_layout.addWidget(self.chessboard, stretch=2)
-        # Right Panel (Control + Side Panels)
-        right_panel = QVBoxLayout()
-        main_layout.addLayout(right_panel, stretch=1)
+    def create_widgets(self):
+        """
+        Creates and places all main widgets in the window.
+        """
+        # Chessboard
+        self.chessboard = ChessBoardWidget(self, self.app, width=600, height=600)
+        self.chessboard.pack(side="left", padx=10, pady=10)
+
+        # Right Panel containing Control and Side Panels
+        right_panel = tk.Frame(self, bg=Styles.CURRENT_THEME["background"])
+        right_panel.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
         # Control Panel
-        self.control_panel = ControlPanel(self.app)
-        right_panel.addWidget(self.control_panel)
+        self.control_panel = ControlPanel(right_panel, self.app)
+        self.control_panel.pack(fill="x", pady=5)
 
         # Side Panel
-        self.side_panel = SidePanel(self.app)
-        right_panel.addWidget(self.side_panel)
-
-        # Progress Bar for Model Loading
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # Indeterminate progress
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("Loading model...")
-        right_panel.addWidget(self.progress_bar)
-
-        # Timer Setup (Do not start yet)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_timer_display)
-        # Timer will be started once the model is loaded
+        self.side_panel = SidePanel(right_panel, self.app)
+        self.side_panel.pack(fill="both", expand=True, pady=5)
 
         # Status Bar
-        self.status = self.statusBar()
-        self.status.showMessage("Welcome to Chess AI!")
+        self.status_bar = StatusBar(self)
+        self.status_bar.pack(side="bottom", fill="x")
 
-    def start_game(self):
+        # Link status bar to app
+        self.app.status_bar = self.status_bar
+
+    def refresh_ui(self):
         """
-        Starts the game by initiating the timer and hiding the progress bar.
+        Refreshes the UI elements, e.g., after theme change.
         """
-        self.progress_bar.hide()
-        self.timer.start(1000)  # Update every second
-        self.status.showMessage("Game started. Good luck!")
+        self.configure(bg=Styles.CURRENT_THEME["background"])
+        self.chessboard.configure(bg=Styles.CURRENT_THEME["background"])
+        self.control_panel.configure(bg=Styles.CURRENT_THEME["background"])
+        self.side_panel.configure(bg=Styles.CURRENT_THEME["background"])
+        self.status_bar.configure(bg=Styles.CURRENT_THEME["background"])
 
-    def update_timer_display(self):
-        white_minutes, white_seconds = divmod(self.app.white_time, 60)
-        black_minutes, black_seconds = divmod(self.app.black_time, 60)
-        timer_text = f"White: {white_minutes:02}:{white_seconds:02} - Black: {black_minutes:02}:{black_seconds:02}"
-        self.side_panel.update_timer(timer_text)
+        # Update chessboard squares and pieces
+        self.chessboard.draw_board()
+        self.chessboard.draw_pieces()
 
-    def update_status(self, message, color="green"):
-        self.side_panel.update_status(message, color)
-    def update_timer(self):
-        if self.app.board.is_game_over():
-            self.timer.stop()
-            return
+        # Update control panel buttons
+        for child in self.control_panel.winfo_children():
+            if isinstance(child, tk.Button):
+                child.configure(bg=Styles.CURRENT_THEME["button_bg"], fg=Styles.CURRENT_THEME["button_fg"])
 
-        if self.app.board.turn == chess.WHITE:
-            if self.white_time > 0:
-                self.white_time -= 1
-            else:
-                QMessageBox.information(
-                    self, "Time Up", "White's time is up. Black (Stockfish) wins!"
-                )
-                self.app.handle_resignation(chess.WHITE)
-                self.timer.stop()
-        else:
-            if self.black_time > 0:
-                self.black_time -= 1
-            else:
-                QMessageBox.information(
-                    self, "Time Up", "Black's time is up. White (AI) wins!"
-                )
-                self.app.handle_resignation(chess.BLACK)
-                self.timer.stop()
-
-        self.update_timer_display()
-
-    def update_timer_display(self):
-        white_minutes, white_seconds = divmod(self.white_time, 60)
-        black_minutes, black_seconds = divmod(self.black_time, 60)
-        timer_text = f"White: {white_minutes:02}:{white_seconds:02} - Black: {black_minutes:02}:{black_seconds:02}"
-        self.side_panel.update_timer(timer_text)
+        # Update side panel labels
+        self.side_panel.timer_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.side_panel.status_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.side_panel.captured_white_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.side_panel.captured_black_label.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])
+        self.side_panel.move_list.configure(bg=Styles.CURRENT_THEME["background"], fg=Styles.CURRENT_THEME["foreground"])

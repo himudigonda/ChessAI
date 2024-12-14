@@ -1,31 +1,32 @@
 # chess_app/ui/chessboard_widget.py
 
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtGui import QPainter, QColor, QPixmap
-from PyQt5.QtCore import Qt, QRect
+import tkinter as tk
+from tkinter import Canvas
 import chess
+from PIL import Image, ImageTk
 import os
+from .styles import Styles
 
 
-class ChessBoardWidget(QWidget):
-    def __init__(self, app_instance):
-        super().__init__()
-        self.app = app_instance
-        self.board = app_instance.board
-        self.selected_square = None
-        self.dragging = False
-        self.drag_piece = None
-        self.drag_position = None
-        self.legal_moves = []
-
-        # Load piece images
-        self.piece_images = {}
+class ChessBoardWidget(Canvas):
+    def __init__(self, parent, app, **kwargs):
+        super().__init__(parent, bg=Styles.CURRENT_THEME["background"], **kwargs)
+        self.app = app
+        self.board = app.board
+        self.square_size = 60  # Will be updated dynamically
+        self.images = {}
         self.load_piece_images()
+        self.bind("<Configure>", self.on_resize)
+        self.bind("<Button-1>", self.on_click)
+        self.bind("<B1-Motion>", self.on_drag)
+        self.bind("<ButtonRelease-1>", self.on_drop)
+        self.dragging_piece = None
+        self.drag_start = None
+        self.drag_image = None
+        self.highlight_squares = []
+        self.show_coordinates = False
 
     def load_piece_images(self):
-        """
-        Load chess piece images from the assets directory.
-        """
         piece_filenames = {
             "P": "White_pawn.png",
             "N": "White_knight.png",
@@ -40,122 +41,165 @@ class ChessBoardWidget(QWidget):
             "q": "Black_queen.png",
             "k": "Black_king.png",
         }
-
-        assets_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "assets")
-        )
-
+        assets_path = os.path.join(os.path.dirname(__file__), "..", "assets")
         for piece, filename in piece_filenames.items():
-            image_path = os.path.join(assets_path, filename)
-            print(f"Attempting to load piece image: {image_path}")  # Debug log
-            if os.path.exists(image_path):
-                self.piece_images[piece] = QPixmap(image_path)
-                if self.piece_images[piece].isNull():
-                    print(f"Error: Failed to load {image_path}, QPixmap is null!")
-            else:
-                print(f"Error: Missing asset file {image_path}")
-                self.piece_images[piece] = None  # Placeholder
+            path = os.path.join(assets_path, filename)
+            try:
+                image = Image.open(path).convert("RGBA")  # Ensure image has alpha channel
+                image = image.resize((self.square_size - 10, self.square_size - 10), Image.LANCZOS)
+                # Create a white background image
+                background = Image.new("RGBA", image.size, (255, 255, 255, 0))
+                combined = Image.alpha_composite(background, image)
+                self.images[piece] = ImageTk.PhotoImage(combined)
+            except Exception as e:
+                print(f"Error loading image {path}: {e}")
+                self.images[piece] = None
 
-    def paintEvent(self, event):
+    def on_resize(self, event):
         """
-        Handle painting of the chessboard and pieces.
+        Handles the resize event to adjust square sizes.
         """
-        painter = QPainter(self)
-        rect = self.rect()
-        square_size = min(rect.width(), rect.height()) // 8
-        
-        # Draw squares
-        colors = [QColor("#EEEED2"), QColor("#769656")]
+        size = min(event.width, event.height)
+        self.square_size = size // 8
+        self.load_piece_images()  # Reload images with new size
+        self.draw_board()
+        self.draw_pieces()
+        if self.show_coordinates:
+            self.draw_coordinates()
+
+    def draw_board(self):
+        """
+        Draws the chessboard squares.
+        """
+        self.delete("square")
+        colors = [Styles.CURRENT_THEME["chessboard_light"], Styles.CURRENT_THEME["chessboard_dark"]]
         for row in range(8):
             for col in range(8):
+                x1 = col * self.square_size
+                y1 = row * self.square_size
+                x2 = x1 + self.square_size
+                y2 = y1 + self.square_size
                 color = colors[(row + col) % 2]
-                painter.fillRect(
-                    col * square_size,
-                    row * square_size,
-                    square_size,
-                    square_size,
-                    color,
-                )
+                self.create_rectangle(x1, y1, x2, y2, fill=color, outline=color, tags="square")
 
-        # Draw pieces
-        for square, piece in self.board.piece_map().items():
-            row = 7 - chess.square_rank(square)
-            col = chess.square_file(square)
-            x, y = col * square_size, row * square_size
+        # Highlight squares if any
+        for square in self.highlight_squares:
+            self.highlight_square(square, Styles.CURRENT_THEME["highlight_color"])
 
-            # Use piece symbol directly for the key
-            piece_key = piece.symbol()  # E.g., "P" for White pawn, "k" for Black king
-            piece_image = self.piece_images.get(piece_key)
-
-            print(f"Drawing piece: {piece_key} at square ({row}, {col})")
-
-            if piece_image:
-                painter.drawPixmap(
-                    QRect(x, y, square_size, square_size),
-                    piece_image.scaled(
-                        square_size,
-                        square_size,
-                        Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation,
-                    ),
-                )
-            else:
-                print(f"Error: No image loaded for piece {piece_key}")
-
-    def highlight_square(self, painter, square, color, square_size):
+    def draw_pieces(self):
         """
-        Highlight a specific square.
+        Draws the chess pieces on the board.
+        """
+        self.delete("piece")
+        for square in chess.SQUARES:
+            piece = self.board.piece_at(square)
+            if piece:
+                row = 7 - chess.square_rank(square)
+                col = chess.square_file(square)
+                x = col * self.square_size
+                y = row * self.square_size
+                image = self.images.get(piece.symbol())
+                if image:
+                    self.create_image(x + self.square_size//2, y + self.square_size//2, image=image, tags="piece")
+
+    def draw_coordinates(self):
+        """
+        Draws coordinate labels around the chessboard.
+        """
+        self.delete("coord")
+        font = ("Helvetica", 10)
+        # Files (A-H)
+        for col in range(8):
+            x = col * self.square_size + self.square_size / 2
+            y = 8 * self.square_size
+            self.create_text(x, y + 10, text=chr(ord('A') + col), tags="coord", font=font, fill=Styles.CURRENT_THEME["foreground"])
+
+        # Ranks (1-8)
+        for row in range(8):
+            x = -10
+            y = row * self.square_size + self.square_size / 2
+            self.create_text(x, y, text=str(row + 1), tags="coord", font=font, fill=Styles.CURRENT_THEME["foreground"])
+
+    def toggle_coordinates(self, show):
+        """
+        Toggles the display of coordinate labels.
+
+        :param show: Boolean indicating whether to show coordinates.
+        """
+        self.show_coordinates = show
+        if show:
+            self.draw_coordinates()
+        else:
+            self.delete("coord")
+
+    def highlight_square(self, square, color):
+        """
+        Highlights a specific square with a given color.
+
+        :param square: The square to highlight.
+        :param color: The color for highlighting.
         """
         row = 7 - chess.square_rank(square)
         col = chess.square_file(square)
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(color)
-        painter.drawRect(col * square_size, row * square_size, square_size, square_size)
+        x1 = col * self.square_size
+        y1 = row * self.square_size
+        x2 = x1 + self.square_size
+        y2 = y1 + self.square_size
+        self.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags="highlight")
 
-    def mousePressEvent(self, event):
-        if self.app.board.is_game_over():
-            return
+    def on_click(self, event):
+        """
+        Handles the mouse click event to select a piece.
 
-        rect = self.rect()
-        square_size = rect.width() // 8
-        col = event.x() // square_size
-        row = 7 - event.y() // square_size
+        :param event: The Tkinter event.
+        """
+        col = event.x // self.square_size
+        row = 7 - (event.y // self.square_size)
         square = chess.square(col, row)
         piece = self.board.piece_at(square)
-
         if piece and piece.color == self.board.turn:
             self.selected_square = square
-            self.dragging = True
-            self.drag_piece = (
-                piece.symbol().lower()
-                if piece.color == chess.BLACK
-                else piece.symbol().upper()
-            )
-            self.drag_position = event.pos()
-            self.legal_moves = [
-                move for move in self.board.legal_moves if move.from_square == square
-            ]
-            self.update()
+            self.drag_start = (event.x, event.y)
+            self.highlight_squares = [move.to_square for move in self.board.legal_moves if move.from_square == square]
+            self.draw_board()
+            self.draw_pieces()
 
-    def mouseMoveEvent(self, event):
-        if self.dragging:
-            self.drag_position = event.pos()
-            self.update()
+    def on_drag(self, event):
+        """
+        Handles the drag motion for moving pieces.
 
-    def mouseReleaseEvent(self, event):
-        if self.dragging:
-            rect = self.rect()
-            square_size = rect.width() // 8
-            col = event.x() // square_size
-            row = 7 - event.y() // square_size
+        :param event: The Tkinter event.
+        """
+        if hasattr(self, 'selected_square') and self.selected_square is not None:
+            if not self.dragging_piece:
+                piece = self.board.piece_at(self.selected_square)
+                if piece:
+                    self.dragging_piece = piece.symbol()
+                    self.drag_image = self.images.get(piece.symbol())
+            if self.dragging_piece and self.drag_image:
+                self.delete("drag")
+                self.create_image(event.x, event.y, image=self.drag_image, tags="drag")
+
+    def on_drop(self, event):
+        """
+        Handles the drop event to execute a move.
+
+        :param event: The Tkinter event.
+        """
+        if hasattr(self, 'selected_square') and self.selected_square is not None:
+            col = event.x // self.square_size
+            row = 7 - (event.y // self.square_size)
             to_square = chess.square(col, row)
             move = chess.Move(self.selected_square, to_square)
-
             if move in self.board.legal_moves:
                 self.app.handle_move(move)
-
-            self.dragging = False
-            self.drag_piece = None
+            else:
+                self.app.status_bar.update_status("Illegal move.", color=Styles.CURRENT_THEME["status_error"])
+            self.dragging_piece = None
+            self.drag_image = None
             self.selected_square = None
-            self.legal_moves = []
-            self.update()
+            self.drag_start = None
+            self.highlight_squares = []
+            self.draw_board()
+            self.draw_pieces()
+            self.delete("drag")
