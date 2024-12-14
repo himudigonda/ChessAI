@@ -4,51 +4,70 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x):
+        residual = x
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += residual
+        out = F.relu(out)
+        return out
+
 class ChessNet(nn.Module):
-    def __init__(self, board_size=8, num_channels=17):  # Updated to 17 channels
+    def __init__(self, board_size=8, num_channels=17, num_residual_blocks=128):
         super(ChessNet, self).__init__()
         self.board_size = board_size
         self.num_channels = num_channels
 
-        # Convolutional layers
         self.conv1 = nn.Conv2d(in_channels=self.num_channels, out_channels=256, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(256, 256, 3, padding=1)
-        self.conv3 = nn.Conv2d(256, 256, 3, padding=1)
-        self.conv4 = nn.Conv2d(256, 256, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(256)
+        self.relu = nn.ReLU(inplace=True)
+
+        # Residual blocks
+        self.residual_blocks = nn.Sequential(
+            *[ResidualBlock(256) for _ in range(num_residual_blocks)]
+        )
 
         # Policy head
-        self.policy_conv = nn.Conv2d(256, 2, 1)  # Produces 2 channels
-        self.policy_fc = nn.Linear(128, board_size * board_size * 73)  # Adjusted input size to match flattened output
+        self.policy_conv = nn.Conv2d(256, 2, 1)
+        self.policy_bn = nn.BatchNorm2d(2)
+        self.policy_relu = nn.ReLU(inplace=True)
+        self.policy_fc = nn.Linear(2 * board_size * board_size, board_size * board_size * 73)
 
         # Value head
         self.value_conv = nn.Conv2d(256, 1, 1)
+        self.value_bn = nn.BatchNorm2d(1)
+        self.value_relu = nn.ReLU(inplace=True)
         self.value_fc1 = nn.Linear(board_size * board_size, 256)
         self.value_fc2 = nn.Linear(256, 1)
 
+        self.dropout = nn.Dropout(p=0.3)
+
     def forward(self, x):
-        # Shared layers
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.residual_blocks(x)
 
         # Policy head
-        p = F.relu(self.policy_conv(x))
-        # Debug statements (optional, can be removed in production)
-        # print(f"Shape of p after policy_conv: {p.shape}")  
-        p = p.view(p.size(0), -1)  # Flatten
-        # print(f"Shape of p after flattening: {p.shape}")  
+        p = self.policy_relu(self.policy_bn(self.policy_conv(x)))
+        p = p.view(p.size(0), -1)
         p = self.policy_fc(p)
         p = F.log_softmax(p, dim=1)
 
         # Value head
-        v = F.relu(self.value_conv(x))
-        v = v.view(v.size(0), -1)  # Flatten
-        v = F.relu(self.value_fc1(v))
+        v = self.value_relu(self.value_bn(self.value_conv(x)))
+        v = v.view(v.size(0), -1)
+        v = self.value_fc1(v)
+        v = self.dropout(F.relu(v))
         v = torch.tanh(self.value_fc2(v))
 
         return p, v
-
 
 def load_model(model, path, device):
     """Load model with proper device handling"""

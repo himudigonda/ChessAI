@@ -27,22 +27,18 @@ def board_to_tensor(board):
             tensor[plane][row][col] = 1.0
 
     # Additional planes for castling rights and en passant
-    # Plane 12: White kingside castling
     tensor[12][0][0] = 1.0 if board.has_kingside_castling_rights(chess.WHITE) else 0.0
-    # Plane 13: White queenside castling
     tensor[13][0][7] = 1.0 if board.has_queenside_castling_rights(chess.WHITE) else 0.0
-    # Plane 14: Black kingside castling
     tensor[14][7][0] = 1.0 if board.has_kingside_castling_rights(chess.BLACK) else 0.0
-    # Plane 15: Black queenside castling
     tensor[15][7][7] = 1.0 if board.has_queenside_castling_rights(chess.BLACK) else 0.0
 
-    # Plane 16: En passant target square
     if board.ep_square is not None:
         ep_row = 7 - chess.square_rank(board.ep_square)
         ep_col = chess.square_file(board.ep_square)
         tensor[16][ep_row][ep_col] = 1.0
 
     return torch.from_numpy(tensor).float()
+
 def move_to_index(move):
     """
     Encodes a move into a unique index.
@@ -67,7 +63,6 @@ def index_to_move(index, board):
             return move
     # If still not found, return a random legal move
     return random.choice(list(board.legal_moves))
-
 
 class ChessDatasetTrain(torch.utils.data.Dataset):
     def __init__(self, data):

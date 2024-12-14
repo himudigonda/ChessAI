@@ -7,7 +7,7 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 import chess
 import chess.pgn
 from chess_app.board import ChessBoard
-from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer, get_device
+from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer, get_device, GameSaver, Logger, TensorBoardLogger
 import time
 import torch
 # Import matplotlib modules
@@ -16,11 +16,10 @@ matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-
 # Import necessary functions
 from chess_app.data import board_to_tensor, move_to_index, index_to_move
 from chess_app.model import save_model
-
+from chess_app.config import Config
 
 class ChessApp:
     def __init__(self, root):
@@ -28,6 +27,11 @@ class ChessApp:
         self.root.title("Chess AI")
         self.root.geometry("1400x800")  # Increased width for side panel
         self.root.configure(bg="#F5F5F7")
+
+        # Initialize Logger and TensorBoardLogger
+        self.logger_instance = Logger()
+        self.logger = self.logger_instance.get_logger()
+        self.tensorboard_logger = TensorBoardLogger()
 
         self.board = chess.Board()
         self.selected_square = None
@@ -52,9 +56,12 @@ class ChessApp:
         self.device = get_device()  # Get the device
 
         # Initialize AIPlayer with the trained model, AI plays white
-        self.ai_player = AIPlayer(model_path="chess_model.pth", device=self.device, side=chess.WHITE)
+        self.ai_player = AIPlayer(model_path=Config.MODEL_PATH, device=self.device, side=chess.WHITE)
 
         self.theme = Theme(self)
+
+        # Initialize GameSaver
+        self.game_saver = GameSaver()
 
         # Create UI elements first
         self.create_main_layout()
@@ -71,7 +78,7 @@ class ChessApp:
         self.update_clock()
 
         # Initialize move delay (milliseconds)
-        self.move_delay = 1000  # 1 second per move
+        self.move_delay = Config.MOVE_DELAY  # 1 second per move
 
         # Start the AI vs Stockfish game
         self.start_ai_game()
@@ -295,6 +302,7 @@ class ChessApp:
 
     def update_status_bar(self, message):
         self.status_bar.config(text=message)
+        self.logger.info(message)
 
     def update_timer(self):
         self.timer_label.config(
@@ -332,7 +340,7 @@ class ChessApp:
         selected_depth = int(self.difficulty_var.get())
         if self.ai_player.engine:
             self.ai_player.engine.configure({"Skill Level": selected_depth})
-            print(f"AI difficulty set to depth {selected_depth}")
+            self.logger.info(f"AI difficulty set to depth {selected_depth}")
         self.update_status_bar(f"AI difficulty set to level {selected_depth}")
 
     def toggle_sound(self):
@@ -342,12 +350,14 @@ class ChessApp:
     def toggle_theme(self):
         self.theme.toggle_theme()
         self.update_status_bar("Theme toggled.")
+        self.chess_board.draw_chessboard()
+        self.chess_board.draw_pieces()
 
     def undo_move(self):
         if len(self.board.move_stack) > 0:
             last_move = self.board.pop()
             self.redo_stack.append(last_move)
-            if last_move.to_square:
+            if last_move.to_square is not None:
                 captured_piece = self.board.piece_at(last_move.to_square)
                 if captured_piece:
                     if captured_piece.color:
@@ -475,6 +485,9 @@ class ChessApp:
 
             self.update_status_bar("Move made successfully.")
 
+            # Collect data for training
+            self.collect_training_data(move)
+
             if not self.board.is_game_over():
                 # Fetch and display probable future predictions
                 predictions = self.get_probable_future_predictions(self.ai_player.model, self.board, self.ai_player.device)
@@ -486,6 +499,18 @@ class ChessApp:
                 # Proceed with AI move if it's AI's turn
                 if self.board.turn == self.ai_player.side:
                     self.handle_ai_move()
+
+    def collect_training_data(self, move):
+        """
+        Collects training data from the move made.
+        """
+        # Collect training data for the move
+        board_tensor = board_to_tensor(self.board).numpy()
+        move_index = move_to_index(move)
+        # Placeholder outcome; to be updated after game completion
+        # For simplicity, set outcome to 0.0 here; actual outcome is determined at game end
+        self.training_data = getattr(self, 'training_data', [])
+        self.training_data.append((board_tensor, move_index, 0.0))  # Outcome to be set later
 
     def handle_ai_move(self):
         def ai_move_thread():
@@ -536,6 +561,17 @@ class ChessApp:
         self.chess_board.draw_pieces()
         self.update_status_bar("AI made its move.")
 
+        # Collect data for training
+        self.collect_training_data(ai_move)
+
+        if not self.board.is_game_over():
+            # Fetch and display probable future predictions
+            predictions = self.get_probable_future_predictions(self.ai_player.model, self.board, self.ai_player.device)
+            prediction_text = "Probable Future Moves:\n"
+            for pred_move, win_prob in predictions:
+                prediction_text += f"{self.board.san(pred_move)}: {win_prob*100:.2f}% Win\n"
+            self.show_predictions(prediction_text)
+
         if self.board.is_game_over():
             self.handle_game_over()
 
@@ -552,6 +588,34 @@ class ChessApp:
             else:
                 messagebox.showinfo("Game Over", "It's a draw!")
                 self.update_status_bar("Draw!")
+
+        # Save the game using GameSaver
+        self.game_saver.save_game(self.board)
+
+        # Set the outcome for training data
+        outcome_val = 0.5  # Placeholder for draw
+        if outcome.winner is not None:
+            if outcome.winner == self.ai_player.side:
+                outcome_val = 1.0
+            else:
+                outcome_val = 0.0
+
+        # Update the outcome for all training data
+        if hasattr(self, 'training_data'):
+            for idx in range(len(self.training_data)):
+                board_tensor, move_index, _ = self.training_data[idx]
+                self.training_data[idx] = (board_tensor, move_index, outcome_val)
+            # Log the outcome
+            self.logger.info(f"Game over. Outcome: {outcome_val}")
+
+            # Log to TensorBoard
+            if self.tensorboard_logger:
+                metrics = {
+                    'Training/Game_Outcome': outcome_val
+                }
+                self.tensorboard_logger.log_metrics(metrics, epoch=0)  # Epoch can be modified as needed
+
+        # Close TensorBoard logger if training is done here
 
     def save_game(self):
         filename = filedialog.asksaveasfilename(defaultextension=".pgn",
@@ -618,6 +682,8 @@ class ChessApp:
         self.chess_board.draw_chessboard()
         self.chess_board.draw_pieces()
         self.update_status_bar("Game restarted.")
+        # Reset training data
+        self.training_data = []
 
     def analyze_position(self):
         self.update_status_bar("Analyzing position...")
@@ -644,7 +710,7 @@ class ChessApp:
             self.update_status_bar("No hint available.")
 
     def analyze_game(self):
-        analyzer = GameAnalyzer(engine_path="/opt/homebrew/bin/stockfish", depth=3)  # Set correct engine path
+        analyzer = GameAnalyzer(engine_path=Config.ENGINE_PATH, depth=3)  # Set correct engine path
         analysis = analyzer.analyze_game(self.board)
         analyzer.close()
 
@@ -695,6 +761,9 @@ class ChessApp:
         self.chess_board.draw_pieces()
         self.update_status_bar("Starting AI vs Stockfish game.")
 
+        # Reset training data
+        self.training_data = []
+
         # Begin the game loop
         self.schedule_next_move()
 
@@ -715,95 +784,34 @@ class ChessApp:
             self.root.after(self.move_delay, self.schedule_next_move)
         else:
             self.handle_game_over()
-            # Optionally, trigger training after the game ends
-            self.train_model_during_game()
+            # Log the outcome
+            outcome = self.board.outcome()
+            outcome_val = 0.5
+            if outcome.winner is not None:
+                if outcome.winner == self.ai_player.side:
+                    outcome_val = 1.0
+                else:
+                    outcome_val = 0.0
+            self.logger.info(f"Game finished with outcome: {outcome_val}")
+
+            # Log to TensorBoard
+            if self.tensorboard_logger:
+                metrics = {
+                    'Training/Game_Outcome': outcome_val
+                }
+                self.tensorboard_logger.log_metrics(metrics, epoch=0)  # Epoch can be modified as needed
+
+            # Save training data
+            if hasattr(self, 'training_data') and self.training_data:
+                # Here, you could append to a dataset or handle as needed
+                pass
 
     def train_model_during_game(self):
         """
         Trains the model using the current game's moves.
         """
-        # Collect training data from the current game
-        training_data = []
-        outcome = 0.5  # Placeholder; set to 1 if AI wins, 0 if loses, 0.5 for draw
-
-        # Determine outcome
-        if self.board.outcome().winner is None:
-            outcome = 0.5
-        elif self.board.outcome().winner == self.ai_player.side:
-            # AI won
-            outcome = 1.0
-        else:
-            # AI lost
-            outcome = 0.0
-
-        # Collect moves
-        temp_board = chess.Board()
-        for move in self.board.move_stack:
-            board_tensor = board_to_tensor(temp_board).numpy()
-            move_index = move_to_index(move)
-            training_data.append((board_tensor, move_index, outcome))
-            temp_board.push(move)
-
-        # Train the model
-        if training_data:
-            # Show progress bar in terminal
-            from tqdm import tqdm
-            from torch.utils.data import DataLoader, Dataset
-
-            class ChessDatasetTrain(Dataset):
-                def __init__(self, data):
-                    self.data = data  # List of tuples (board_tensor, move_index, outcome)
-
-                def __len__(self):
-                    return len(self.data)
-
-                def __getitem__(self, idx):
-                    board, move, outcome = self.data[idx]
-                    return torch.tensor(board, dtype=torch.float32), torch.tensor(move, dtype=torch.long), torch.tensor(outcome, dtype=torch.float32)
-
-            dataset = ChessDatasetTrain(training_data)
-            dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
-
-            optimizer = optim.Adam(self.ai_player.model.parameters(), lr=1e-4)
-            criterion_policy = nn.NLLLoss()
-            criterion_value = nn.MSELoss()
-
-            self.ai_player.model.train()
-            epochs = 5
-            for epoch in range(epochs):
-                total_loss = 0
-                loop = tqdm(dataloader, desc=f"Training Epoch {epoch+1}/{epochs}", leave=False)
-                for batch_idx, (boards, moves, outcomes) in enumerate(loop):
-                    boards = boards.to(self.ai_player.device)
-                    moves = moves.to(self.ai_player.device)
-                    outcomes = outcomes.to(self.ai_player.device).float()
-
-                    optimizer.zero_grad()
-                    policy, value = self.ai_player.model(boards)
-
-                    # Policy loss
-                    loss_policy = criterion_policy(policy, moves)
-
-                    # Value loss
-                    loss_value = criterion_value(value.squeeze(), outcomes)
-
-                    # Total loss
-                    loss = loss_policy + loss_value
-                    loss.backward()
-                    optimizer.step()
-
-                    total_loss += loss.item()
-                    loop.set_postfix(loss=loss.item())
-
-            avg_loss = total_loss / len(dataloader)
-            print(f"Training Epoch {epoch+1}/{epochs}, Average Loss: {avg_loss:.4f}")
-
-            # Save the trained model
-            save_model(self.ai_player.model, self.ai_player.model_path)
-            print("Training completed and model saved.")
-
-            # Update evaluation graph
-            self.update_evaluation_graph()
+        # Implement training logic if training is to be done during the game
+        pass
 
     def update_move_list(self, move_san):
         self.move_list.config(state=tk.NORMAL)

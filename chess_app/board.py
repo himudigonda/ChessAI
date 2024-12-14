@@ -4,8 +4,7 @@ import tkinter as tk
 from chess import SQUARES, square_rank, square_file, Move
 from chess_app.utils import Timer, SoundEffects
 import chess
-import time
-
+import os
 
 class ChessBoard(tk.Canvas):
     def __init__(self, parent, app, **kwargs):
@@ -44,7 +43,7 @@ class ChessBoard(tk.Canvas):
         assets_path = "./assets"
 
         for piece, filename in piece_filenames.items():
-            file_path = f"{assets_path}/{filename}"
+            file_path = os.path.join(assets_path, filename)
             try:
                 self.piece_images[piece] = tk.PhotoImage(file=file_path)
             except tk.TclError:
@@ -61,7 +60,12 @@ class ChessBoard(tk.Canvas):
         canvas_height = self.winfo_height()
         self.square_size = min(canvas_width, canvas_height) // 8
 
-        colors = ["#EEEED2", "#769656"]
+        # Define colors based on theme
+        if self.app.theme.current_theme == "light":
+            colors = ["#EEEED2", "#769656"]
+        else:
+            colors = ["#303030", "#B58863"]
+
         for row in range(8):
             for col in range(8):
                 color = colors[(row + col) % 2]

@@ -14,6 +14,9 @@ import pygame
 import time
 import tkinter as tk
 from tkinter import messagebox
+import logging
+from chess_app.config import Config
+from torch.utils.tensorboard import SummaryWriter
 
 def get_device():
     """
@@ -26,11 +29,118 @@ def get_device():
         print("Using CPU device")
         return torch.device("cpu")
 
+class GameSaver:
+    def __init__(self):
+        self.save_dir = Config.SAVE_DIRECTORY
+        self.games_per_file = Config.GAMES_PER_FILE
+        self.files_per_folder = Config.FILES_PER_FOLDER
+        self.max_folders = Config.MAX_FOLDERS
+        self.current_folder = 1
+        self.current_file = 1
+        self.games_in_current_file = 0
+        self.initialize_directories()
+
+    def initialize_directories(self):
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+
+        # Initialize folders and files
+        for folder_num in range(1, self.max_folders + 1):
+            folder_path = os.path.join(self.save_dir, f"batch_{folder_num}")
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+
+        # Find the next folder and file to save
+        for folder_num in range(1, self.max_folders + 1):
+            folder_path = os.path.join(self.save_dir, f"batch_{folder_num}")
+            for file_num in range(1, self.files_per_folder + 1):
+                file_path = os.path.join(folder_path, f"games_{file_num}.pgn")
+                if os.path.exists(file_path):
+                    # Count the number of games in the file
+                    with open(file_path, 'r') as f:
+                        games = []
+                        while True:
+                            game = chess.pgn.read_game(f)
+                            if game is None:
+                                break
+                            games.append(game)
+                        if len(games) < self.games_per_file:
+                            self.current_folder = folder_num
+                            self.current_file = file_num
+                            self.games_in_current_file = len(games)
+                            return
+                else:
+                    # File does not exist, ready to write
+                    self.current_folder = folder_num
+                    self.current_file = file_num
+                    self.games_in_current_file = 0
+                    return
+
+        # If all folders/files are full, overwrite the first folder and file
+        self.current_folder = 1
+        self.current_file = 1
+        self.games_in_current_file = 0
+
+    def save_game(self, board):
+        folder_path = os.path.join(self.save_dir, f"batch_{self.current_folder}")
+        file_path = os.path.join(folder_path, f"games_{self.current_file}.pgn")
+
+        # Append the game to the file
+        with open(file_path, 'a') as f:
+            game = chess.pgn.Game.from_board(board)
+            exporter = chess.pgn.FileExporter(f)
+            game.accept(exporter)
+
+        self.games_in_current_file += 1
+
+        if self.games_in_current_file >= self.games_per_file:
+            self.games_in_current_file = 0
+            self.current_file += 1
+            if self.current_file > self.files_per_folder:
+                self.current_file = 1
+                self.current_folder += 1
+                if self.current_folder > self.max_folders:
+                    self.current_folder = 1  # Overwrite from first folder
+
+class Logger:
+    def __init__(self):
+        self.logger = logging.getLogger('ChessAI')
+        self.logger.setLevel(logging.DEBUG)
+
+        # Create handlers
+        c_handler = logging.StreamHandler()
+        f_handler = logging.FileHandler(os.path.join(Config.LOG_DIR, 'chess_ai.log'))
+        c_handler.setLevel(logging.INFO)
+        f_handler.setLevel(logging.DEBUG)
+
+        # Create formatters and add to handlers
+        c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        c_handler.setFormatter(c_format)
+        f_handler.setFormatter(f_format)
+
+        # Add handlers to logger
+        self.logger.addHandler(c_handler)
+        self.logger.addHandler(f_handler)
+
+    def get_logger(self):
+        return self.logger
+
+class TensorBoardLogger:
+    def __init__(self):
+        self.writer = SummaryWriter(log_dir=Config.TENSORBOARD_LOG_DIR, comment=Config.TENSORBOARD_COMMENT)
+
+    def log_metrics(self, metrics, epoch):
+        for key, value in metrics.items():
+            self.writer.add_scalar(key, value, epoch)
+
+    def close(self):
+        self.writer.close()
 
 class AIPlayer:
-    def __init__(self, model_path="chess_model.pth", device=None, side=chess.WHITE):
+    def __init__(self, model_path=Config.MODEL_PATH, device=None, side=chess.WHITE):
         self.device = device if device else get_device()
-        self.model = ChessNet().to(self.device)
+        self.model = ChessNet(num_residual_blocks=Config.NUM_RESIDUAL_BLOCKS).to(self.device)
         self.model_path = model_path
         self.side = side
         if os.path.exists(model_path):
@@ -39,7 +149,7 @@ class AIPlayer:
         else:
             print("Trained model not found. Using Stockfish as fallback.")
             self.model = None
-            self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")  # Update path if necessary
+            self.engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
 
     def get_best_move(self, board):
         if self.model and board.turn == self.side:
@@ -68,13 +178,12 @@ class AIPlayer:
         if hasattr(self, 'engine') and self.engine:
             self.engine.quit()
 
-
 class GameAnalyzer:
     def __init__(self, engine_path, depth=3):
         self.engine_path = engine_path
         self.depth = depth
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-    
+
     def analyze_game(self, board):
         """
         Analyzes the game by iterating through all moves and collecting evaluations.
@@ -96,10 +205,9 @@ class GameAnalyzer:
                 print(f"Error analyzing move {move}: {e}")
                 analysis.append((move, 0))  # Neutral evaluation in case of error
         return analysis
-    
+
     def close(self):
         self.engine.quit()
-
 
 class SaveLoad:
     @staticmethod
@@ -108,9 +216,10 @@ class SaveLoad:
         Saves the current game to a PGN file.
         """
         game = chess.pgn.Game.from_board(board)
-        with open(filename, 'w') as f:
-            f.write(str(game))
-    
+        with open(filename, 'a') as f:
+            exporter = chess.pgn.FileExporter(f)
+            game.accept(exporter)
+
     @staticmethod
     def load_game(filename):
         """
@@ -125,7 +234,6 @@ class SaveLoad:
             board.push(move)
         return board
 
-
 class SoundEffects:
     def __init__(self):
         pygame.mixer.init()
@@ -136,21 +244,20 @@ class SoundEffects:
             print(f"Error loading sound files: {e}")
             self.move_sound = None
             self.capture_sound = None
-    
+
     def play_move(self):
         if self.move_sound:
             self.move_sound.play()
-    
+
     def play_capture(self):
         if self.capture_sound:
             self.capture_sound.play()
-
 
 class Theme:
     def __init__(self, app):
         self.app = app
         self.current_theme = "light"
-    
+
     def apply_light_theme(self):
         self.app.root.configure(bg="#F5F5F7")
         self.app.side_panel_frame.configure(bg="#FFFFFF")
@@ -158,7 +265,7 @@ class Theme:
         self.app.move_list.configure(bg="#F0F0F0", fg="#333333")
         self.app.chess_board.configure(bg="#FFFFFF")
         # Update other widgets' backgrounds and foregrounds as needed
-    
+
     def apply_dark_theme(self):
         self.app.root.configure(bg="#2E2E2E")
         self.app.side_panel_frame.configure(bg="#3C3F41")
@@ -166,7 +273,7 @@ class Theme:
         self.app.move_list.configure(bg="#4D4D4D", fg="#FFFFFF")
         self.app.chess_board.configure(bg="#000000")
         # Update other widgets' backgrounds and foregrounds as needed
-    
+
     def toggle_theme(self):
         if self.current_theme == "light":
             self.apply_dark_theme()
@@ -174,7 +281,6 @@ class Theme:
         else:
             self.apply_light_theme()
             self.current_theme = "light"
-
 
 class Timer:
     @staticmethod
