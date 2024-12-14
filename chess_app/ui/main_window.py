@@ -28,8 +28,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.app = app_instance
         self.setWindowTitle("Chess AI")
-        self.setGeometry(100, 100, 1200, 800)  # Width x Height
-
+        self.setGeometry(100, 100, 900, 700)  # Adjust the window size
+        self.setMinimumSize(900, 700)
         # Central Widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -40,8 +40,8 @@ class MainWindow(QMainWindow):
 
         # Chessboard Widget
         self.chessboard = ChessBoardWidget(self.app)
-        main_layout.addWidget(self.chessboard, stretch=3)
-
+        # main_layout.addWidget(self.chessboard, stretch=3)
+        main_layout.addWidget(self.chessboard, stretch=2)
         # Right Panel (Control + Side Panels)
         right_panel = QVBoxLayout()
         main_layout.addLayout(right_panel, stretch=1)

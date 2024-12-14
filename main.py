@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog
 from chess_app.ui.main_window import MainWindow
 from chess_app.utils import AIPlayer, Logger, GameSaver, EloRating
 import chess
+
 # main.py
 from chess_app.utils import Timer, SaveLoad
 from chess_app.data import board_to_tensor, move_to_index
@@ -21,6 +22,7 @@ class ModelLoaderThread(QThread):
     """
     A QThread to handle loading the AI model and other backend tasks.
     """
+
     model_loaded = pyqtSignal(AIPlayer)  # Signal emitted when model is loaded
     error = pyqtSignal(str)  # Signal emitted when there's an error
 
@@ -31,7 +33,9 @@ class ModelLoaderThread(QThread):
     def run(self):
         try:
             # Simulate loading the AI model
-            ai_player = AIPlayer(model_path=self.model_path, device=None, side=chess.WHITE)
+            ai_player = AIPlayer(
+                model_path=self.model_path, device=None, side=chess.WHITE
+            )
             self.model_loaded.emit(ai_player)
         except Exception as e:
             self.error.emit(str(e))
@@ -86,64 +90,69 @@ class ChessApp:
         sys.exit(app.exec_())
 
     def on_model_loaded(self, ai_player):
-        """
-        Callback when the AI model is loaded successfully.
-        """
         self.ai_player = ai_player
-        self.model_loaded = True  # Set the flag to indicate the model is loaded
+        self.model_loaded = True
+        self.main_window.progress_bar.hide()  # Stop and hide the progress bar
         self.main_window.update_status("Model loaded successfully.", color="green")
 
     def on_model_loading_error(self, error_message):
         """
         Callback when there is an error loading the AI model.
         """
-        self.main_window.update_status(f"Error loading model: {error_message}", color="red")
-        QMessageBox.critical(self.main_window, "Error", f"Failed to load the model: {error_message}")
+        self.main_window.update_status(
+            f"Error loading model: {error_message}", color="red"
+        )
+        QMessageBox.critical(
+            self.main_window, "Error", f"Failed to load the model: {error_message}"
+        )
 
-    def handle_move(self, move, promotion=None):
-        if not self.model_loaded:
-            QMessageBox.warning(self.main_window, "Model Loading", "Please wait for the model to load.")
-            return
+    def handle_move(self, move):
+        """
+        Handles the player's move and triggers the AI move if necessary.
+        """
+        try:
+            # Validate if the move is legal
+            if move not in self.board.legal_moves:
+                self.main_window.update_status("Illegal move attempted.", color="red")
+                return
 
-        if promotion:
-            move.promotion = chess.Piece.from_symbol(promotion.upper()).piece_type
-        if move in self.board.legal_moves:
-            self.last_move = (move.from_square, move.to_square)
-
-            # Handle captured pieces
-            captured_piece = self.board.piece_at(move.to_square)
-            if captured_piece:
-                color = "black" if captured_piece.color else "white"
-                self.captured_pieces[color].append(captured_piece.symbol())
-
-            # Update move list
-            move_san = self.board.san(move)
+            # Push the move to the board
             self.board.push(move)
+            
+            # Update the chessboard and UI
+            self.main_window.chessboard.update()
+
+            # Convert the move to SAN and update the move list
+            move_san = self.board.san(move)
             self.main_window.side_panel.update_move_list(move_san)
 
-            # Update captured pieces display
-            self.main_window.side_panel.update_captured_pieces(
-                self.captured_pieces["white"], self.captured_pieces["black"]
-            )
-
-            # Collect training data
-            self.collect_training_data(move)
-
-            # Check for game over
+            # Handle game end or trigger the AI move
             if self.board.is_game_over():
                 self.handle_game_over()
-            else:
-                # AI's turn
-                if self.board.turn == self.ai_player.side:
-                    self.handle_ai_move()
+            elif self.board.turn == chess.BLACK and self.ai_player.side == chess.BLACK:
+                self.ai_make_move()
 
-    def handle_ai_move(self):
-        if not self.model_loaded:
-            return
+        except Exception as e:
+            # Log and display the error
+            self.main_window.update_status(f"Error handling move: {str(e)}", color="red")
+            self.logger.error(f"Error in handle_move: {str(e)}")
 
+
+    def ai_make_move(self):
+        """
+        Handles the AI's move automatically.
+        """
         move = self.ai_player.get_best_move(self.board)
-        if move:
-            self.handle_move(move)
+        self.handle_move(move)
+
+    def start_game(self):
+        """
+        Starts the game and ensures AI moves first if it is White.
+        """
+        self.main_window.update_status("Game started.")
+        if self.ai_player.side == chess.WHITE:
+            self.ai_make_move()
+
     def handle_game_over(self):
         outcome = self.board.outcome()
         if outcome.winner is None:

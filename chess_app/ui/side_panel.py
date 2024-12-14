@@ -9,8 +9,14 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QGroupBox,
     QHBoxLayout,
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QTextEdit,
+    QGroupBox,
 )
 from PyQt5.QtCore import Qt
+
 
 
 class SidePanel(QWidget):
@@ -64,19 +70,20 @@ class SidePanel(QWidget):
         move_list_layout.addWidget(self.move_list)
 
         layout.addWidget(move_list_group)
-
-        # Future Move Predictions
-        predictions_group = QGroupBox("Future Move Predictions")
-        predictions_layout = QVBoxLayout()
-        predictions_group.setLayout(predictions_layout)
-
-        self.predictions_list = QListWidget()
-        predictions_layout.addWidget(self.predictions_list)
-
-        layout.addWidget(predictions_group)
-
         layout.addStretch()
 
+    def update_move_list(self, move_san):
+        current_text = self.move_list.toPlainText().strip()
+        if current_text:
+            last_line = current_text.split("\n")[-1]
+            if len(last_line.split()) == 2:
+                self.move_list.append(f"{last_line.split()[0]} {last_line.split()[1]} {move_san}")
+            else:
+                move_number = current_text.count('\n') + 1
+                self.move_list.append(f"{move_number}. {move_san}")
+        else:
+            self.move_list.append(f"1. {move_san}")
+    
     def update_timer(self, timer_text):
         self.timer_label.setText(timer_text)
 
@@ -88,12 +95,6 @@ class SidePanel(QWidget):
         self.captured_white_pieces.setText(" ".join(white_pieces))
         self.captured_black_pieces.setText(" ".join(black_pieces))
 
-    def update_move_list(self, move_san):
-        current_text = self.move_list.toPlainText()
-        self.move_list.setText(current_text + move_san + "\n")
-        self.move_list.verticalScrollBar().setValue(
-            self.move_list.verticalScrollBar().maximum()
-        )
 
     def update_move_list_undo(self):
         current_text = self.move_list.toPlainText().strip().split("\n")

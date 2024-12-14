@@ -11,7 +11,7 @@ class Config:
 
     # Model and Training Configuration
     MODEL_PATH = "chess_model.pth"  # Path to save/load the trained model
-    ENGINE_PATH = "/path/to/stockfish"  # Path to the Stockfish engine executable
+    ENGINE_PATH = "/opt/homebrew/bin/stockfish"  # Path to the Stockfish engine executable
     SAVE_DIRECTORY = "saved_games"  # Directory to save game PGNs
     LOG_DIR = "logs"  # Directory to save log files
     PLOTLY_LOG_DIR = "tensorboard_logs"  # Directory for TensorBoard logs
