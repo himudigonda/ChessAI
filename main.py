@@ -3,6 +3,8 @@ from tkinter import ttk
 from tkinter.messagebox import showinfo
 import chess
 import os
+import time
+from threading import Timer
 
 class ChessApp:
     def __init__(self, root):
@@ -16,10 +18,17 @@ class ChessApp:
         self.dragging_piece = None
         self.drag_start_coords = None
         self.legal_moves = []
+        self.last_move = None
+
+        self.white_time = 300  # 5 minutes for white
+        self.black_time = 300  # 5 minutes for black
+        self.active_timer = None
+        self.is_white_turn = True
 
         self.create_main_layout()
         self.create_chessboard()
         self.create_side_panel()
+        self.update_timer()
 
     def create_main_layout(self):
         self.main_frame = ttk.Frame(self.root, style="MainFrame.TFrame")
@@ -72,12 +81,19 @@ class ChessApp:
 
     def draw_chessboard(self):
         colors = ["#f0d9b5", "#b58863"]
+        self.board_canvas.delete("square")
+
         for row in range(8):
             for col in range(8):
                 color = colors[(row + col) % 2]
                 x1, y1 = col * self.square_size, row * self.square_size
                 x2, y2 = x1 + self.square_size, y1 + self.square_size
-                self.board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline=color)
+                self.board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline=color, tags="square")
+
+        if self.last_move:
+            from_square, to_square = self.last_move
+            self.highlight_square(from_square, "#e6b800")
+            self.highlight_square(to_square, "#e6b800")
 
     def draw_pieces(self):
         self.board_canvas.delete("piece")
@@ -92,10 +108,13 @@ class ChessApp:
         self.board_canvas.delete("highlight")
         for move in self.legal_moves:
             to_square = move.to_square
-            row, col = 7 - chess.square_rank(to_square), chess.square_file(to_square)
-            x1, y1 = col * self.square_size, row * self.square_size
-            x2, y2 = x1 + self.square_size, y1 + self.square_size
-            self.board_canvas.create_rectangle(x1, y1, x2, y2, outline="#0073e6", width=3, tags="highlight")
+            self.highlight_square(to_square, "#0073e6")
+
+    def highlight_square(self, square, color):
+        row, col = 7 - chess.square_rank(square), chess.square_file(square)
+        x1, y1 = col * self.square_size, row * self.square_size
+        x2, y2 = x1 + self.square_size, y1 + self.square_size
+        self.board_canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags="highlight")
 
     def on_click(self, event):
         col = event.x // self.square_size
@@ -125,8 +144,13 @@ class ChessApp:
 
             move = chess.Move(self.selected_square, dropped_square)
             if move in self.legal_moves:
+                self.last_move = (self.selected_square, dropped_square)
                 self.board.push(move)
                 self.update_move_list(move)
+
+                # Switch timers
+                self.is_white_turn = not self.is_white_turn
+                self.update_timer()
 
             # Reset state
             self.selected_square = None
@@ -144,14 +168,27 @@ class ChessApp:
         self.status_label = ttk.Label(self.side_panel_frame, text="White to move", font=("Arial", 16, "bold"))
         self.status_label.pack(pady=10)
 
+        # Timer display
+        self.timer_label = ttk.Label(self.side_panel_frame, text="Time: 05:00 - 05:00", font=("Arial", 14))
+        self.timer_label.pack(pady=5)
+
         # Move list
         self.move_list_label = ttk.Label(self.side_panel_frame, text="Moves:", font=("Arial", 14))
         self.move_list_label.pack(pady=5)
 
-        self.move_list = tk.Text(self.side_panel_frame, height=25, width=30, state=tk.DISABLED, bg="#333", fg="white")
+        self.move_list = tk.Text(self.side_panel_frame, height=20, width=30, state=tk.DISABLED, bg="#333", fg="white")
         self.move_list.pack(pady=5)
 
         # Buttons
+        self.undo_button = ttk.Button(self.side_panel_frame, text="Undo Move", command=self.undo_move)
+        self.undo_button.pack(pady=5)
+
+        self.save_button = ttk.Button(self.side_panel_frame, text="Save Game", command=self.save_game)
+        self.save_button.pack(pady=5)
+
+        self.load_button = ttk.Button(self.side_panel_frame, text="Load Game", command=self.load_game)
+        self.load_button.pack(pady=5)
+
         self.resign_button = ttk.Button(self.side_panel_frame, text="Resign", command=self.resign)
         self.resign_button.pack(pady=5)
 
@@ -166,11 +203,70 @@ class ChessApp:
         turn = "White" if self.board.turn else "Black"
         self.status_label.config(text=f"{turn} to move")
 
+    def undo_move(self):
+        if len(self.board.move_stack) > 0:
+            self.board.pop()
+            self.last_move = None
+            self.is_white_turn = not self.is_white_turn
+            self.update_timer()
+            self.draw_chessboard()
+            self.draw_pieces()
+
+    def save_game(self):
+        with open("saved_game.txt", "w") as f:
+            f.write(self.board.fen())
+        showinfo("Game Saved", "The game has been saved successfully.")
+
+    def load_game(self):
+        try:
+            with open("saved_game.txt", "r") as f:
+                fen = f.read().strip()
+                self.board.set_fen(fen)
+            self.last_move = None
+            self.is_white_turn = self.board.turn
+            self.update_timer()
+            self.draw_chessboard()
+            self.draw_pieces()
+            showinfo("Game Loaded", "The game has been loaded successfully.")
+        except FileNotFoundError:
+            showinfo("Error", "No saved game found.")
+
     def resign(self):
         showinfo("Game Over", "You resigned!")
 
     def offer_draw(self):
         showinfo("Draw Offered", "You offered a draw!")
+
+    def update_timer(self):
+        if self.active_timer:
+            self.root.after_cancel(self.active_timer)
+
+        self.update_timer_display()
+        if self.is_white_turn:
+            self.active_timer = self.root.after(1000, self.decrement_white_timer)
+        else:
+            self.active_timer = self.root.after(1000, self.decrement_black_timer)
+
+    def update_timer_display(self):
+        white_minutes, white_seconds = divmod(self.white_time, 60)
+        black_minutes, black_seconds = divmod(self.black_time, 60)
+        self.timer_label.config(
+            text=f"Time: {white_minutes:02}:{white_seconds:02} - {black_minutes:02}:{black_seconds:02}"
+        )
+
+    def decrement_white_timer(self):
+        if self.white_time > 0:
+            self.white_time -= 1
+            self.update_timer()
+        else:
+            showinfo("Game Over", "Black wins on time!")
+
+    def decrement_black_timer(self):
+        if self.black_time > 0:
+            self.black_time -= 1
+            self.update_timer()
+        else:
+            showinfo("Game Over", "White wins on time!")
 
 if __name__ == "__main__":
     root = tk.Tk()
