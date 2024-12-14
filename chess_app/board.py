@@ -141,7 +141,21 @@ class ChessBoard(tk.Canvas):
 
     def square_from_coords(self, col, row):
         return chess.square(col, 7 - row)
-
+    def show_promotion_dialog(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Promote Pawn")
+        dialog.geometry("200x50")
+        
+        pieces = ['Q', 'R', 'B', 'N']
+        for i, piece in enumerate(pieces):
+            btn = tk.Button(
+                dialog, 
+                text=piece,
+                command=lambda p=piece: self.handle_promotion(p)
+            )
+            btn.pack(side=tk.LEFT, padx=5)
+        
+        return dialog
     def highlight_legal_moves(self):
         self.delete("highlight")
         for move in self.app.legal_moves:

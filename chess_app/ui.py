@@ -1,4 +1,6 @@
 # chess_app/ui.py
+import random
+from chess_app.utils import AIPlayer, SoundEffects
 import chess
 import tkinter as tk
 from tkinter import ttk
@@ -11,7 +13,7 @@ class ChessApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Chess App")
-        self.root.geometry("1024x768")  # Smaller default window size
+        self.root.geometry("1024x768")
         self.root.configure(bg="#F5F5F7")
 
         self.board = Board()
@@ -32,25 +34,30 @@ class ChessApp:
         self.create_status_bar()
         self.update_timer()
 
-    def create_main_layout(self):
-        self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
-
-        self.board_frame = tk.Frame(self.main_frame, bg="#D6D6D6", bd=0, highlightthickness=0)
-        self.board_frame.grid(row=0, column=0, padx=10, pady=10, sticky="NSEW")
-
-        self.side_panel_frame = tk.Frame(self.main_frame, bg="#FFFFFF", bd=0, highlightthickness=0)
-        self.side_panel_frame.grid(row=0, column=1, padx=10, pady=10, sticky="NSEW")
-
-        self.main_frame.columnconfigure(0, weight=2)
-        self.main_frame.columnconfigure(1, weight=1)
-        self.main_frame.rowconfigure(0, weight=1)
-
-    def create_chessboard(self):
-        self.chess_board = ChessBoard(self.board_frame, self)
-        self.chess_board.pack(fill=tk.BOTH, expand=True)
-
     def create_side_panel(self):
+        side_panel = ttk.Frame(self.root)
+        side_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=20, pady=20)
+
+        # Create button frame
+        button_frame = ttk.Frame(side_panel)
+        button_frame.pack(fill=tk.X, pady=10)
+
+        # Add analyze button
+        self.analyze_button = ttk.Button(
+            button_frame, 
+            text="Analyze Position",
+            command=self.analyze_position
+        )
+        self.analyze_button.pack(pady=5)
+
+        # Add sound toggle
+        self.sound_toggle = ttk.Checkbutton(
+            button_frame,
+            text="Sound Effects",
+            variable=tk.BooleanVar(value=True)
+        )
+        self.sound_toggle.pack(pady=5)
+
         # Game status label
         self.status_label = tk.Label(
             self.side_panel_frame,
@@ -133,6 +140,25 @@ class ChessApp:
             self.side_panel_frame, text="Toggle Theme", command=self.toggle_theme
         )
         self.theme_button.pack(pady=10)
+
+
+    def create_main_layout(self):
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.board_frame = tk.Frame(self.main_frame, bg="#D6D6D6", bd=0, highlightthickness=0)
+        self.board_frame.grid(row=0, column=0, padx=10, pady=10, sticky="NSEW")
+
+        self.side_panel_frame = tk.Frame(self.main_frame, bg="#FFFFFF", bd=0, highlightthickness=0)
+        self.side_panel_frame.grid(row=0, column=1, padx=10, pady=10, sticky="NSEW")
+
+        self.main_frame.columnconfigure(0, weight=2)
+        self.main_frame.columnconfigure(1, weight=1)
+        self.main_frame.rowconfigure(0, weight=1)
+
+    def create_chessboard(self):
+        self.chess_board = ChessBoard(self.board_frame, self)
+        self.chess_board.pack(fill=tk.BOTH, expand=True)
 
     def create_status_bar(self):
         self.status_bar = tk.Label(
@@ -253,13 +279,22 @@ class ChessApp:
     def handle_move(self, move):
         if move in self.legal_moves:
             self.last_move = (self.selected_square, move.to_square)
+            
+            # Play appropriate sound
+            if self.board.piece_at(move.to_square):
+                SoundEffects.play_capture()
+            else:
+                SoundEffects.play_move()
+                
             captured_piece = self.board.piece_at(move.to_square)
             if captured_piece:
                 if captured_piece.color:
                     self.captured_pieces["black"].append(captured_piece.symbol())
                 else:
                     self.captured_pieces["white"].append(captured_piece.symbol())
+            
             self.board.push(move)
+            # ... rest of the method        
             self.update_captured_pieces()
             self.update_move_list(move)
 
@@ -271,6 +306,18 @@ class ChessApp:
             # Redraw board
             self.chess_board.draw_chessboard()
             self.chess_board.draw_pieces()
+    def analyze_position(self):
+        # Get AI evaluation
+        self.ai_player = AIPlayer()
+        self.ai_player.set_position(self.board.fen())
+        best_move = self.ai_player.get_best_move()
+        
+        if best_move:
+            # Highlight suggested move
+            from_square = chess.parse_square(best_move[:2])
+            to_square = chess.parse_square(best_move[2:4])
+            self.chess_board.highlight_square(from_square, "#00ff00")  # Green
+            self.chess_board.highlight_square(to_square, "#00ff00")
     def load_puzzle(self):
         with open("puzzles.txt", "r") as f:
             puzzles = f.readlines()

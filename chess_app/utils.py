@@ -3,7 +3,33 @@ from stockfish import Stockfish
 import tkinter as tk
 from tkinter import messagebox
 import os
-  
+# chess_app/utils.py
+import os
+from playsound import playsound
+
+class SoundEffects:
+    @staticmethod
+    def get_asset_path(filename):
+        # Get the directory of the current script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Go up one level to project root and then into assets
+        return os.path.join(os.path.dirname(current_dir), "assets", filename)
+
+    @staticmethod
+    def play_move():
+        try:
+            sound_path = SoundEffects.get_asset_path("move.mp3")
+            playsound(sound_path, block=False)
+        except Exception as e:
+            print(f"Error playing move sound: {e}")
+            
+    @staticmethod
+    def play_capture():
+        try:
+            sound_path = SoundEffects.get_asset_path("capture.mp3")
+            playsound(sound_path, block=False)
+        except Exception as e:
+            print(f"Error playing capture sound: {e}")
 class Timer:
     def __init__(self, initial_time=300, increment=2):
         self.white_time = initial_time
