@@ -1,13 +1,12 @@
 # chess_app/utils.py
 
-
 from chess_app.config import Config
 from chess_app.data import board_to_tensor, move_to_index, index_to_move
 from chess_app.model import ChessNet, load_model, save_model
 from sklearn.linear_model import LinearRegression
 from tkinter import messagebox
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm  # For progress bars
+from tqdm import tqdm
 import chess.engine
 import chess.pgn
 import json
@@ -18,17 +17,12 @@ import pygame
 import random
 import threading
 import time
-import tkinter as tk
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-def get_device():
-    """
-    Selects the best available device (CUDA or CPU).
 
-    :return: torch.device object representing the selected device.
-    """
+def get_device():
     if torch.cuda.is_available():
         print("Using CUDA device (NVIDIA GPU)")
         return torch.device("cuda")
@@ -38,24 +32,11 @@ def get_device():
 
 
 class AIPlayer:
-    """
-    AIPlayer handles the AI's move generation using a trained neural network model
-    or falls back to Stockfish if the model is not available.
-    """
-
     def __init__(self, model_path="chess_model.pth", device=None, side=chess.WHITE):
-        """
-        Initializes the AIPlayer.
-
-        :param model_path: Path to the trained model file.
-        :param device: Torch device to run the model on.
-        :param side: The side the AI is playing (chess.WHITE or chess.BLACK).
-        """
         self.device = device if device else get_device()
         self.model = ChessNet().to(self.device)
         self.model_path = model_path
         self.side = side
-        self.difficulty_level = 2  # Default difficulty
 
         if os.path.exists(model_path):
             load_model(self.model, model_path, self.device)
@@ -63,85 +44,60 @@ class AIPlayer:
             self.engine = None
         else:
             print("Trained model not found. Using Stockfish as fallback.")
-            self.engine = chess.engine.SimpleEngine.popen_uci(
-                "/usr/local/bin/stockfish"
-            )  # Update path accordingly
+            self.engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
+
+        self.difficulty_level = 2
 
     def set_difficulty(self, level):
-        """
-        Sets the AI difficulty level.
-
-        :param level: Integer representing the difficulty level.
-        """
         self.difficulty_level = level
         if self.engine:
-            # Example: Adjust Stockfish's Skill Level based on difficulty
             self.engine.configure({"Skill Level": level})
 
     def get_best_move(self, board):
-        """
-        Determines the best move for the AI to make based on the current board state.
-
-        :param board: chess.Board object representing the current game state.
-        :return: chess.Move object representing the selected move.
-        """
-        if self.model and board.turn == self.side:
-            # Ensure the model is in evaluation mode
+        if self.model and (not self.engine) and board.turn == self.side:
             self.model.eval()
             board_tensor = board_to_tensor(board).to(self.device)
             with torch.no_grad():
-                policy, _, _ = self.model(
-                    board_tensor.unsqueeze(0)
-                )  # Add batch dimension
+                policy, _, _ = self.model(board_tensor.unsqueeze(0))
             move_probs = torch.exp(policy).cpu().numpy()[0]
-            top_move_indices = move_probs.argsort()[-10:][::-1]  # Top 10 moves
+            top_move_indices = move_probs.argsort()[-10:][::-1]
             for move_index in top_move_indices:
                 move = index_to_move(move_index, board)
                 if move in board.legal_moves:
                     return move
-            # Fallback to random move if no top move is legal
             return random.choice(list(board.legal_moves))
-        elif self.engine:
-            # Use Stockfish if AI model is not available or it's not AI's turn
+        elif self.engine and board.turn != self.side:
+            # Opponent is Stockfish
+            result = self.engine.play(
+                board, chess.engine.Limit(depth=self.difficulty_level)
+            )
+            return result.move
+        elif (
+            self.engine
+            and board.turn == self.side
+            and (not self.model_path or not os.path.exists(self.model_path))
+        ):
+            # Using Stockfish if no model
             result = self.engine.play(
                 board, chess.engine.Limit(depth=self.difficulty_level)
             )
             return result.move
         else:
-            # Fallback to random move
+            # Fallback if something goes wrong
             return random.choice(list(board.legal_moves))
 
     def close(self):
-        """
-        Closes the AIPlayer's engine if it is using Stockfish.
-        """
         if self.engine:
             self.engine.quit()
 
 
 class GameAnalyzer:
-    """
-    GameAnalyzer uses a chess engine to analyze a completed game move by move.
-    """
-
     def __init__(self, engine_path, depth=3):
-        """
-        Initializes the GameAnalyzer.
-
-        :param engine_path: Path to the chess engine executable (e.g., Stockfish).
-        :param depth: Search depth for the engine.
-        """
         self.engine_path = engine_path
         self.depth = depth
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
 
     def analyze_game(self, board):
-        """
-        Analyzes the game by iterating through all moves and collecting evaluations.
-
-        :param board: chess.Board object representing the completed game.
-        :return: List of tuples (chess.Move, evaluation score).
-        """
         analysis = []
         temp_board = chess.Board()
         for move in board.move_stack:
@@ -158,29 +114,16 @@ class GameAnalyzer:
                 analysis.append((move, eval_score))
             except Exception as e:
                 print(f"Error analyzing move {move}: {e}")
-                analysis.append((move, 0))  # Neutral evaluation in case of error
+                analysis.append((move, 0))
         return analysis
 
     def close(self):
-        """
-        Closes the chess engine.
-        """
         self.engine.quit()
 
 
 class SaveLoad:
-    """
-    SaveLoad provides static methods to save and load chess games in PGN format.
-    """
-
     @staticmethod
     def save_game(board, filename):
-        """
-        Saves the current game to a PGN file.
-
-        :param board: chess.Board object representing the game state.
-        :param filename: Path to the PGN file to save.
-        """
         game = chess.pgn.Game.from_board(board)
         with open(filename, "w") as f:
             exporter = chess.pgn.FileExporter(f)
@@ -188,13 +131,6 @@ class SaveLoad:
 
     @staticmethod
     def load_game(filename):
-        """
-        Loads a game from a PGN file and returns a chess.Board object.
-
-        :param filename: Path to the PGN file to load.
-        :return: chess.Board object representing the loaded game.
-        :raises ValueError: If no game is found in the PGN file.
-        """
         with open(filename, "r") as f:
             game = chess.pgn.read_game(f)
         if game is None:
@@ -206,14 +142,7 @@ class SaveLoad:
 
 
 class GameSaver:
-    """
-    GameSaver handles the logic for saving games into organized directories and files.
-    """
-
     def __init__(self):
-        """
-        Initializes the GameSaver by setting up directories and tracking the current save location.
-        """
         self.save_dir = Config.SAVE_DIRECTORY
         self.games_per_file = Config.GAMES_PER_FILE
         self.files_per_folder = Config.FILES_PER_FOLDER
@@ -224,25 +153,19 @@ class GameSaver:
         self.initialize_directories()
 
     def initialize_directories(self):
-        """
-        Initializes the save directories and determines the next file to save to.
-        """
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
 
-        # Initialize folders and files
         for folder_num in range(1, self.max_folders + 1):
             folder_path = os.path.join(self.save_dir, f"batch_{folder_num}")
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
 
-        # Find the next folder and file to save
         for folder_num in range(1, self.max_folders + 1):
             folder_path = os.path.join(self.save_dir, f"batch_{folder_num}")
             for file_num in range(1, self.files_per_folder + 1):
                 file_path = os.path.join(folder_path, f"games_{file_num}.pgn")
                 if os.path.exists(file_path):
-                    # Count the number of games in the file
                     with open(file_path, "r") as f:
                         games = []
                         while True:
@@ -256,34 +179,25 @@ class GameSaver:
                             self.games_in_current_file = len(games)
                             return
                 else:
-                    # File does not exist, ready to write
                     self.current_folder = folder_num
                     self.current_file = file_num
                     self.games_in_current_file = 0
                     return
 
-        # If all folders/files are full, overwrite the first folder and file
         self.current_folder = 1
         self.current_file = 1
         self.games_in_current_file = 0
 
     def save_game(self, board):
-        """
-        Saves the game to the current PGN file. Rotates to a new file/folder if necessary.
-
-        :param board: chess.Board object representing the completed game.
-        """
         folder_path = os.path.join(self.save_dir, f"batch_{self.current_folder}")
         file_path = os.path.join(folder_path, f"games_{self.current_file}.pgn")
 
-        # Append the game to the file
         with open(file_path, "a") as f:
             game = chess.pgn.Game.from_board(board)
             exporter = chess.pgn.FileExporter(f)
             game.accept(exporter)
 
         self.games_in_current_file += 1
-
         if self.games_in_current_file >= self.games_per_file:
             self.games_in_current_file = 0
             self.current_file += 1
@@ -291,27 +205,21 @@ class GameSaver:
                 self.current_file = 1
                 self.current_folder += 1
                 if self.current_folder > self.max_folders:
-                    self.current_folder = 1  # Overwrite from first folder
+                    self.current_folder = 1
 
 
 class Logger:
     def __init__(self):
         self.logger = logging.getLogger("ChessAI")
         self.logger.setLevel(logging.DEBUG)
-
-        # Create handlers
         c_handler = logging.StreamHandler()
         f_handler = logging.FileHandler(os.path.join(Config.LOG_DIR, "chess_ai.log"))
         c_handler.setLevel(logging.INFO)
         f_handler.setLevel(logging.DEBUG)
-
-        # Create formatters and add to handlers
         c_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         f_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         c_handler.setFormatter(c_format)
         f_handler.setFormatter(f_format)
-
-        # Add handlers to logger
         self.logger.addHandler(c_handler)
         self.logger.addHandler(f_handler)
 
@@ -329,7 +237,7 @@ class PlotlyDashApp(threading.Thread):
         self.x_data = []
         self.y_data = []
         self.elo_data = []
-        self.daemon = True  # Daemonize thread
+        self.daemon = True
 
     def run(self):
         import dash
@@ -337,16 +245,11 @@ class PlotlyDashApp(threading.Thread):
         import plotly.graph_objs as go
 
         self.app = dash.Dash(__name__)
-
         self.app.layout = html.Div(
             [
                 html.H1("Chess AI Training Progress"),
                 dcc.Graph(id="live-update-graph"),
-                dcc.Interval(
-                    id="interval-component",
-                    interval=5 * 1000,  # in milliseconds
-                    n_intervals=0,
-                ),
+                dcc.Interval(id="interval-component", interval=5 * 1000, n_intervals=0),
             ]
         )
 
@@ -355,8 +258,6 @@ class PlotlyDashApp(threading.Thread):
             [dash.dependencies.Input("interval-component", "n_intervals")],
         )
         def update_graph_live(n):
-            # For simplicity, assume logs are stored in a JSON file
-            # where each entry contains 'epoch', 'loss', 'accuracy', 'elo'
             log_file = os.path.join(self.config.LOG_DIR, "chess_ai_training.json")
             if os.path.exists(log_file):
                 with open(log_file, "r") as f:
@@ -364,8 +265,6 @@ class PlotlyDashApp(threading.Thread):
                 self.x_data = [entry["epoch"] for entry in data]
                 self.y_data = [entry["loss"] for entry in data]
                 self.elo_data = [entry["elo"] for entry in data]
-            else:
-                data = []
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
@@ -412,14 +311,10 @@ class EloRating:
         self.k = k_factor
 
     def update(self, opponent_rating, score):
-        """
-        Updates the Elo rating based on the game result.
-        :param opponent_rating: Elo rating of the opponent
-        :param score: 1 for win, 0.5 for draw, 0 for loss
-        """
         expected_score = 1 / (1 + 10 ** ((opponent_rating - self.rating) / 400))
         self.rating += self.k * (score - expected_score)
         return self.rating
+
 
 class SoundEffects:
     def __init__(self):
@@ -428,8 +323,16 @@ class SoundEffects:
         move_sound_path = os.path.join(assets_path, "move.mp3")
         capture_sound_path = os.path.join(assets_path, "capture.mp3")
         try:
-            self.move_sound = pygame.mixer.Sound(move_sound_path) if os.path.exists(move_sound_path) else None
-            self.capture_sound = pygame.mixer.Sound(capture_sound_path) if os.path.exists(capture_sound_path) else None
+            self.move_sound = (
+                pygame.mixer.Sound(move_sound_path)
+                if os.path.exists(move_sound_path)
+                else None
+            )
+            self.capture_sound = (
+                pygame.mixer.Sound(capture_sound_path)
+                if os.path.exists(capture_sound_path)
+                else None
+            )
         except pygame.error as e:
             print(f"Error loading sound files: {e}")
             self.move_sound = None
@@ -442,7 +345,6 @@ class SoundEffects:
     def play_capture(self):
         if self.capture_sound:
             self.capture_sound.play()
-
 
 
 class Timer:

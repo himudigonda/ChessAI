@@ -5,6 +5,7 @@ from chess import SQUARES, square_rank, square_file
 from chess_app.utils import Timer, SoundEffects
 import chess
 import os
+from PIL import Image, ImageTk
 
 
 class ChessBoard(tk.Canvas):
@@ -14,32 +15,23 @@ class ChessBoard(tk.Canvas):
     """
 
     def __init__(self, parent, app, **kwargs):
-        """
-        Initializes the ChessBoard.
-
-        :param parent: The parent Tkinter widget.
-        :param app: The main ChessApp instance.
-        :param kwargs: Additional keyword arguments for Tkinter Canvas.
-        """
         super().__init__(parent, bg="#FFFFFF", highlightthickness=0, **kwargs)
         self.app = app
         self.board = app.board
         self.piece_images = {}
+        self.square_size = 60  # Initialize with a default value
         self.load_piece_images()
 
         # Bind the resize event to redraw the board
         self.bind("<Configure>", self.on_canvas_resize)
 
-        # Disable user interactions since AI vs Stockfish is automated
-        # To enable user interactions, uncomment the following lines
-        # self.bind("<Button-1>", self.on_click)
-        # self.bind("<B1-Motion>", self.on_drag)
-        # self.bind("<ButtonRelease-1>", self.on_drop)
-
+        # If needed, user interactions can be enabled by binding mouse events
         self.dragging_piece = None
         self.drag_start_coords = None
 
     def load_piece_images(self):
+        from PIL import Image, ImageTk
+
         piece_filenames = {
             "P": "White_pawn.png",
             "N": "White_knight.png",
@@ -57,6 +49,10 @@ class ChessBoard(tk.Canvas):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         assets_path = os.path.join(current_dir, "..", "assets")
 
+        # If called before square_size is known, just use a default size
+        if self.square_size <= 0:
+            self.square_size = 60
+
         for piece, filename in piece_filenames.items():
             file_path = os.path.join(assets_path, filename)
             try:
@@ -72,28 +68,20 @@ class ChessBoard(tk.Canvas):
                 self.piece_images[piece] = None
 
     def on_canvas_resize(self, event):
-        """
-        Handles the canvas resize event by redrawing the chessboard and pieces.
-
-        :param event: The Tkinter event object.
-        """
         self.draw_chessboard()
         self.draw_pieces()
 
     def draw_chessboard(self):
-        """
-        Draws the chessboard squares on the canvas.
-        Highlights the last move if available.
-        """
         self.delete("all")  # Clear the canvas before redrawing
         canvas_width = self.winfo_width()
         canvas_height = self.winfo_height()
-        self.square_size = min(canvas_width, canvas_height) // 8  # Size of each square
+        self.square_size = min(canvas_width, canvas_height) // 8
 
-        # Define colors for the chessboard squares
+        # Reload images with new size
+        self.load_piece_images()
+
         colors = ["#EEEED2", "#769656"]  # Light and dark squares
 
-        # Draw the squares
         for row in range(8):
             for col in range(8):
                 color = colors[(row + col) % 2]
@@ -103,16 +91,13 @@ class ChessBoard(tk.Canvas):
                     x1, y1, x2, y2, fill=color, outline=color, tags="square"
                 )
 
-        # Highlight the last move
+        # Highlight last move if available
         if self.app.last_move:
             from_square, to_square = self.app.last_move
-            self.highlight_square(from_square, "#E6B800")  # Gold color
+            self.highlight_square(from_square, "#E6B800")  # Gold
             self.highlight_square(to_square, "#E6B800")
 
     def draw_pieces(self):
-        """
-        Draws the chess pieces on the board based on the current board state.
-        """
         for square in SQUARES:
             piece = self.board.piece_at(square)
             if piece:
@@ -130,12 +115,6 @@ class ChessBoard(tk.Canvas):
                     print(f"Warning: Image for piece {piece.symbol()} not found.")
 
     def highlight_square(self, square, color):
-        """
-        Highlights a specific square with the given color.
-
-        :param square: The square to highlight.
-        :param color: The color to use for highlighting.
-        """
         row = 7 - square_rank(square)
         col = square_file(square)
         x1 = col * self.square_size
@@ -143,12 +122,3 @@ class ChessBoard(tk.Canvas):
         x2 = x1 + self.square_size
         y2 = y1 + self.square_size
         self.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags="highlight")
-
-    def highlight_legal_moves(self):
-        """
-        Highlights all legal moves available for the selected piece.
-        """
-        self.delete("highlight")
-        for move in self.app.legal_moves:
-            to_square = move.to_square
-            self.highlight_square(to_square, "#0073e6")  # Blue color

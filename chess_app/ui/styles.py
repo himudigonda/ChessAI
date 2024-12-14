@@ -1,11 +1,7 @@
 # chess_app/ui/styles.py
 
-class Styles:
-    """
-    Styles class to define color schemes and font settings for the Tkinter UI.
-    Supports light and dark modes.
-    """
 
+class Styles:
     LIGHT_THEME = {
         "background": "#F5F5F5",
         "foreground": "#000000",

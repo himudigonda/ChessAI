@@ -6,14 +6,15 @@ from chess_app.config import Config
 
 class StatusBar(tk.Frame):
     def __init__(self, parent, **kwargs):
-        """
-        Initializes the StatusBar.
-
-        :param parent: The parent Tkinter widget.
-        :param kwargs: Additional keyword arguments for Frame.
-        """
-        super().__init__(parent, bg=Config.CURRENT_THEME["background"], **kwargs)  # Removed style reference
-        self.label = tk.Label(self, text="Ready", anchor="w", bg=Config.CURRENT_THEME["background"], fg=Config.CURRENT_THEME["foreground"], font=("Helvetica", 12))
+        super().__init__(parent, bg=Config.CURRENT_THEME["background"], **kwargs)
+        self.label = tk.Label(
+            self,
+            text="Ready",
+            anchor="w",
+            bg=Config.CURRENT_THEME["background"],
+            fg=Config.CURRENT_THEME["foreground"],
+            font=("Helvetica", 12),
+        )
         self.label.pack(fill="both", expand=True)
 
     def update_status(self, message, color="green"):
