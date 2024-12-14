@@ -1,4 +1,5 @@
 # chess_app/ui.py
+import chess
 import tkinter as tk
 from tkinter import ttk
 from tkinter.messagebox import showinfo
@@ -242,7 +243,13 @@ class ChessApp:
 
     def toggle_theme(self):
         Theme.toggle_theme(self)
-
+    def handle_ai_move(self):
+        if not self.board.is_game_over():
+            ai_move = self.ai_player.get_best_move()
+            if ai_move:
+                self.board.push(chess.Move.from_uci(ai_move))
+                self.update_board()
+                self.update_status_bar("AI made its move.")
     def handle_move(self, move):
         if move in self.legal_moves:
             self.last_move = (self.selected_square, move.to_square)
@@ -264,3 +271,10 @@ class ChessApp:
             # Redraw board
             self.chess_board.draw_chessboard()
             self.chess_board.draw_pieces()
+    def load_puzzle(self):
+        with open("puzzles.txt", "r") as f:
+            puzzles = f.readlines()
+        puzzle_fen = puzzles[random.randint(0, len(puzzles) - 1)].strip()
+        self.board.set_fen(puzzle_fen)
+        self.update_board()
+        self.update_status_bar("Puzzle loaded!")
