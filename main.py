@@ -119,7 +119,7 @@ class ChessApp:
         self.depth = 3
         self.probabilities = [0.5]  # Start with equal probability for White
         self.piece_images = {}
-        self.drag_data = {"piece": None, "start_square": None}
+        self.drag_data = {"piece": None, "start_square": None, "image_id": None}
 
         # Load piece images
         for key, value in PIECE_ICONS.items():
@@ -181,11 +181,22 @@ class ChessApp:
         if piece and piece.color == self.board.turn:
             self.drag_data["piece"] = self.piece_images[piece.symbol()]
             self.drag_data["start_square"] = square
+            self.drag_data["image_id"] = self.canvas.create_image(event.x, event.y, image=self.drag_data["piece"], tags="dragged_piece")
+            self.start_blinking(self.drag_data["image_id"])
+
+    def start_blinking(self, image_id):
+        def toggle_opacity():
+            if self.canvas.itemcget(image_id, "state") == "normal":
+                self.canvas.itemconfig(image_id, state="hidden")
+            else:
+                self.canvas.itemconfig(image_id, state="normal")
+            self.root.after(300, toggle_opacity)
+
+        toggle_opacity()
 
     def on_piece_drag(self, event):
         if self.drag_data["piece"]:
-            self.canvas.delete("dragged_piece")
-            self.canvas.create_image(event.x, event.y, image=self.drag_data["piece"], tags="dragged_piece")
+            self.canvas.coords(self.drag_data["image_id"], event.x, event.y)
 
     def on_piece_drop(self, event):
         square_size = 75
