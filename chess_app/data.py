@@ -66,11 +66,20 @@ def index_to_move(index, board):
 
 class ChessDatasetTrain(torch.utils.data.Dataset):
     def __init__(self, data):
-        self.data = data  # List of tuples (board_tensor, move_index, outcome)
+        self.data = data  # List of tuples (board_tensor, move_index, outcome, move_quality)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        board, move, outcome = self.data[idx]
-        return torch.tensor(board, dtype=torch.float32), torch.tensor(move, dtype=torch.long), torch.tensor(outcome, dtype=torch.float32)
+        board, move, outcome, move_quality = self.data[idx]
+        # One-hot encode move_quality
+        move_quality_mapping = {
+            "Great Step": 4,
+            "Good Step": 3,
+            "Average Step": 2,
+            "Bad Step": 1,
+            "Blunder": 0
+        }
+        move_quality_encoded = move_quality_mapping.get(move_quality, 2)  # Default to "Average Step"
+        return torch.tensor(board, dtype=torch.float32), torch.tensor(move, dtype=torch.long), torch.tensor(outcome, dtype=torch.float32), torch.tensor(move_quality_encoded, dtype=torch.long)

@@ -2,14 +2,20 @@
 
 import chess
 import chess.engine
-from chess_app.utils import AIPlayer, Logger, TensorBoardLogger
 import torch
-from chess_app.config import Config
+from chess_app.model import ChessNet, load_model, save_model
+from chess_app.data import board_to_tensor, move_to_index, index_to_move
+import random
 import os
+from chess_app.utils import get_device, Logger, TensorBoardLogger, EloRating
+from chess_app.config import Config
+import json
 
 def evaluate_model(model_path, device, num_games=10, engine_path=Config.ENGINE_PATH, depth=2, logger=None, tensorboard_logger=None):
     ai_player = AIPlayer(model_path=model_path, device=device, side=chess.WHITE)
     engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+
+    elo_rating = EloRating(initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR)
 
     results = {"AI_Wins": 0, "Stockfish_Wins": 0, "Draws": 0}
 
@@ -36,18 +42,24 @@ def evaluate_model(model_path, device, num_games=10, engine_path=Config.ENGINE_P
             results["Stockfish_Wins"] += 1
             outcome_val = 0.0
 
-        if logger:
-            logger.info(f"Evaluation Game {game_num + 1}/{num_games}: Outcome = {outcome_val}")
+        # Update Elo Rating
+        elo_rating.update(opponent_rating=1500, score=outcome_val)
 
+        # Log the outcome
+        if logger:
+            logger.info(f"Game {game_num + 1}/{num_games} completed. Outcome: {outcome_val}. ELO: {elo_rating.rating:.0f}")
+
+        # Log to TensorBoard
         if tensorboard_logger:
             metrics = {
-                'Evaluation/Game_Result': outcome_val
+                'Evaluation/Game_Result': outcome_val,
+                'Evaluation/Elo': elo_rating.rating
             }
             tensorboard_logger.log_metrics(metrics, epoch=0)  # Epoch can be modified as needed
 
     engine.quit()
     ai_player.close()
-    return results
+    return results, elo_rating.rating
 
 def main():
     config = Config()
@@ -55,23 +67,23 @@ def main():
     # Ensure log directory exists
     if not os.path.exists(config.LOG_DIR):
         os.makedirs(config.LOG_DIR)
-    if not os.path.exists(config.TENSORBOARD_LOG_DIR):
-        os.makedirs(config.TENSORBOARD_LOG_DIR)
+    if not os.path.exists(config.PLOTLY_LOG_DIR):
+        os.makedirs(config.PLOTLY_LOG_DIR)
 
     logger_instance = Logger()
     logger = logger_instance.get_logger()
 
     tensorboard_logger = TensorBoardLogger()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     logger.info(f"Using device: {device}")
 
     model_path = config.MODEL_PATH
-    num_games = config.NUM_GAMES // 100 if config and hasattr(config, 'NUM_GAMES') else 10
+    num_games = config.NUM_GAMES_EVAL  # Define in config.py
 
     logger.info(f"Evaluating model on {num_games} games against Stockfish.")
 
-    results = evaluate_model(
+    results, final_elo = evaluate_model(
         model_path=model_path,
         device=device,
         num_games=num_games,
@@ -85,13 +97,15 @@ def main():
     logger.info(f"AI Wins: {results['AI_Wins']}")
     logger.info(f"Stockfish Wins: {results['Stockfish_Wins']}")
     logger.info(f"Draws: {results['Draws']}")
+    logger.info(f"Final Elo Rating: {final_elo:.0f}")
 
     # Log results to TensorBoard
     if tensorboard_logger:
         metrics = {
             'Evaluation/AI_Wins': results['AI_Wins'],
             'Evaluation/Stockfish_Wins': results['Stockfish_Wins'],
-            'Evaluation/Draws': results['Draws']
+            'Evaluation/Draws': results['Draws'],
+            'Evaluation/Final_Elo': final_elo
         }
         tensorboard_logger.log_metrics(metrics, epoch=0)
 

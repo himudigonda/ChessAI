@@ -2,3 +2,4 @@
 *.pth
 tensorboard_logs/**
 logs/**
+plotly_logs/**

@@ -7,7 +7,7 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 import chess
 import chess.pgn
 from chess_app.board import ChessBoard
-from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer, get_device, GameSaver, Logger, TensorBoardLogger
+from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer, get_device, GameSaver, Logger, TensorBoardLogger, PlotlyDashApp
 import time
 import torch
 # Import matplotlib modules
@@ -23,66 +23,54 @@ from chess_app.config import Config
 
 class ChessApp:
     def __init__(self, root):
+        # Root window setup
         self.root = root
         self.root.title("Chess AI")
-        self.root.geometry("1400x800")  # Increased width for side panel
+        self.root.geometry("1600x900")
         self.root.configure(bg="#F5F5F7")
 
-        # Initialize Logger and TensorBoardLogger
-        self.logger_instance = Logger()
-        self.logger = self.logger_instance.get_logger()
-        self.tensorboard_logger = TensorBoardLogger()
-
+        # Initialize game state
         self.board = chess.Board()
         self.selected_square = None
         self.dragging_piece = None
         self.drag_start_coords = None
-        self.legal_moves = []
         self.last_move = None
-        self.pending_promotion = None
-        self.evaluation_history = []
-        self.move_numbers = []
-
-        self.white_time = 300  # 5 minutes for white
-        self.black_time = 300  # 5 minutes for black
-        self.white_increment = 5  # seconds per move
+        self.white_time = 300
+        self.black_time = 300
+        self.white_increment = 5
         self.black_increment = 5
         self.captured_pieces = {"white": [], "black": []}
         self.redo_stack = []
-
         self.sound_effects = SoundEffects()
         self.sound_enabled = True
+        self.device = get_device()
+        self.training_data = []
 
-        self.device = get_device()  # Get the device
-
-        # Initialize AIPlayer with the trained model, AI plays white
+        # Initialize loggers and AI
+        self.logger_instance = Logger()
+        self.logger = self.logger_instance.get_logger()
+        self.plotly_dash_app = PlotlyDashApp(logger=self.logger)
+        self.plotly_dash_app.start()
         self.ai_player = AIPlayer(model_path=Config.MODEL_PATH, device=self.device, side=chess.WHITE)
 
-        self.theme = Theme(self)
-
-        # Initialize GameSaver
-        self.game_saver = GameSaver()
-
-        # Create UI elements first
+        # Create frames first
         self.create_main_layout()
-        self.create_chessboard()
-        self.create_side_panel()
-        self.create_move_analysis_panel()  # New method for the graph
-        self.create_status_bar()
-        self.update_timer()
 
-        # Apply theme after UI elements are created
+        # Initialize theme
+        self.theme = Theme(self)
+        
+        # Create all UI components
+        self.create_side_panel()      # Creates move_list
+        self.create_chessboard()
+        self.create_status_bar()
+        
+        # Now apply theme after all UI elements exist
         self.theme.apply_light_theme()
 
-        # Start the clock
+        # Start game
+        self.update_timer()
         self.update_clock()
-
-        # Initialize move delay (milliseconds)
-        self.move_delay = Config.MOVE_DELAY  # 1 second per move
-
-        # Start the AI vs Stockfish game
         self.start_ai_game()
-
     def create_move_analysis_panel(self):
         """
         Creates a panel with a matplotlib graph to display AI's evaluations over moves.

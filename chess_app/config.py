@@ -3,31 +3,26 @@
 import os
 
 class Config:
-    BOARD_SIZE = 8
-    NUM_CHANNELS = 17  # 12 for pieces, 5 for additional features
-    INPUT_SIZE = 805  # 768 (board) + 7 (auxiliary) + 30 (history)
-    HIDDEN_SIZE = 1024
-    NUM_RESIDUAL_BLOCKS = 128  # Increased residual blocks for more complexity
-    POLICY_OUTPUT_SIZE = 4672  # 64 squares * 73 possible moves
-    VALUE_OUTPUT_SIZE = 1
-    LEARNING_RATE = 1e-4
-    BATCH_SIZE = 1024
-    EPOCHS = 50
-    NUM_GAMES = 1000
-    ENGINE_PATH = "/opt/homebrew/bin/stockfish"  # Update this path as needed
-    MOVE_DELAY = 1000  # in milliseconds
-
-    SAVE_DIRECTORY = "./saved_games"
-    GAMES_PER_FILE = 10
+    # Model and Training Configuration
+    MODEL_PATH = "chess_model.pth"
+    ENGINE_PATH = "/opt/homebrew/bin/stockfish"  # Update to your Stockfish path
+    SAVE_DIRECTORY = "saved_games"
+    LOG_DIR = "logs"
+    PLOTLY_LOG_DIR = "tensorboard_logs"
+    GAMES_PER_FILE = 100
     FILES_PER_FOLDER = 10
     MAX_FOLDERS = 10
-
-    LOG_DIR = "./logs"
-    TENSORBOARD_LOG_DIR = "./tensorboard_logs"
-
-    MODEL_PATH = "chess_model.pth"
-
-    # TensorBoard parameters
-    TENSORBOARD_COMMENT = "Chess_AI_Training"
-
-    # Additional configurations can be added as needed
+    INITIAL_ELO = 1800
+    K_FACTOR = 32  # Elo K-factor
+    MOVE_DELAY = 1000  # milliseconds
+    BOARD_SIZE = 8
+    NUM_CHANNELS = 17
+    NUM_RESIDUAL_BLOCKS = 256
+    TENSORBOARD_COMMENT = "Chess AI Training"
+    DEPTH = 3
+    BATCH_SIZE = 1024
+    LEARNING_RATE = 3e-4
+    NUM_GAMES_EVAL = 5  # Number of games for evaluation
+    NUM_ITERATIONS = 10  # Number of training iterations
+    NUM_GAMES_PER_ITERATION = 2  # Number of games per iteration
+    EPOCHS = 2

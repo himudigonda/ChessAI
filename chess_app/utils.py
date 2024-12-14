@@ -4,7 +4,7 @@ import torch
 import chess.engine
 import chess.pgn
 from chess_app.model import ChessNet, load_model, save_model
-from chess_app.data import board_to_tensor, move_to_index, index_to_move
+from chess_app.data import board_to_tensor, move_to_index, index_to_move, ChessDatasetTrain
 import random
 import os
 import threading
@@ -17,6 +17,8 @@ from tkinter import messagebox
 import logging
 from chess_app.config import Config
 from torch.utils.tensorboard import SummaryWriter
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
 def get_device():
     """
@@ -28,6 +30,102 @@ def get_device():
     else:
         print("Using CPU device")
         return torch.device("cpu")
+
+class AIPlayer:
+    def __init__(self, model_path="chess_model.pth", device=None, side=chess.WHITE):
+        self.device = device if device else get_device()
+        self.model = ChessNet().to(self.device)
+        self.model_path = model_path
+        self.side = side
+        if os.path.exists(model_path):
+            load_model(self.model, model_path, self.device)
+            print("Loaded trained model.")
+        else:
+            print("Trained model not found. Using Stockfish as fallback.")
+            self.model = None
+            self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")  # Update path if necessary
+
+    def get_best_move(self, board):
+        if self.model and board.turn == self.side:
+            # Ensure the model is in evaluation mode
+            self.model.eval()
+            board_tensor = board_to_tensor(board).to(self.device)
+            with torch.no_grad():
+                policy, value = self.model(board_tensor.unsqueeze(0))  # Add batch dimension
+            move_probs = torch.exp(policy).cpu().numpy()[0]
+            top_move_indices = move_probs.argsort()[-10:][::-1]  # Top 10 moves
+            for move_index in top_move_indices:
+                move = index_to_move(move_index, board)
+                if move in board.legal_moves:
+                    return move
+            # Fallback to random move if no top move is legal
+            return random.choice(list(board.legal_moves))
+        elif hasattr(self, 'engine') and self.engine:
+            # Use Stockfish if AI model is not available or it's not AI's turn
+            result = self.engine.play(board, chess.engine.Limit(time=0.1))
+            return result.move
+        else:
+            # Fallback to random move
+            return random.choice(list(board.legal_moves))
+
+    def close(self):
+        if hasattr(self, 'engine') and self.engine:
+            self.engine.quit()
+
+class GameAnalyzer:
+    def __init__(self, engine_path, depth=3):
+        self.engine_path = engine_path
+        self.depth = depth
+        self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
+    
+    def analyze_game(self, board):
+        """
+        Analyzes the game by iterating through all moves and collecting evaluations.
+        Returns a list of tuples: (move, evaluation)
+        """
+        analysis = []
+        temp_board = chess.Board()
+        for move in board.move_stack:
+            temp_board.push(move)
+            try:
+                info = self.engine.analyse(temp_board, chess.engine.Limit(depth=self.depth))
+                score = info["score"].white()
+                if score.is_mate():
+                    eval_score = 100000 if score.mate() > 0 else -100000
+                else:
+                    eval_score = score.score(mate_score=100000)
+                analysis.append((move, eval_score))
+            except Exception as e:
+                print(f"Error analyzing move {move}: {e}")
+                analysis.append((move, 0))  # Neutral evaluation in case of error
+        return analysis
+    
+    def close(self):
+        self.engine.quit()
+
+class SaveLoad:
+    @staticmethod
+    def save_game(board, filename):
+        """
+        Saves the current game to a PGN file.
+        """
+        game = chess.pgn.Game.from_board(board)
+        with open(filename, 'w') as f:
+            f.write(str(game))
+    
+    @staticmethod
+    def load_game(filename):
+        """
+        Loads a game from a PGN file and returns a chess.Board object.
+        """
+        with open(filename, 'r') as f:
+            game = chess.pgn.read_game(f)
+        if game is None:
+            raise ValueError("No game found in the PGN file.")
+        board = game.board()
+        for move in game.mainline_moves():
+            board.push(move)
+        return board
 
 class GameSaver:
     def __init__(self):
@@ -126,9 +224,71 @@ class Logger:
     def get_logger(self):
         return self.logger
 
+class PlotlyDashApp(threading.Thread):
+    def __init__(self, logger, config=Config):
+        super().__init__()
+        self.logger = logger
+        self.config = config
+        self.app = None
+        self.figure = None
+        self.x_data = []
+        self.y_data = []
+        self.elo_data = []
+        self.daemon = True  # Daemonize thread
+
+    def run(self):
+        import dash
+        from dash import html, dcc
+        import plotly.graph_objs as go
+
+        self.app = dash.Dash(__name__)
+
+        self.app.layout = html.Div([
+            html.H1("Chess AI Training Progress"),
+            dcc.Graph(id='live-update-graph'),
+            dcc.Interval(
+                id='interval-component',
+                interval=5*1000,  # in milliseconds
+                n_intervals=0
+            )
+        ])
+
+        @self.app.callback(
+            dash.dependencies.Output('live-update-graph', 'figure'),
+            [dash.dependencies.Input('interval-component', 'n_intervals')]
+        )
+        def update_graph_live(n):
+            # For simplicity, assume logs are stored in a JSON file
+            # where each entry contains 'epoch', 'loss', 'accuracy', 'elo'
+            log_file = os.path.join(self.config.LOG_DIR, 'chess_ai_training.json')
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    data = json.load(f)
+                self.x_data = [entry['epoch'] for entry in data]
+                self.y_data = [entry['loss'] for entry in data]
+                self.elo_data = [entry['elo'] for entry in data]
+            else:
+                data = []
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=self.x_data, y=self.y_data, mode='lines+markers', name='Loss'))
+            fig.add_trace(go.Scatter(x=self.x_data, y=self.elo_data, mode='lines+markers', name='Elo Rating', yaxis='y2'))
+            fig.update_layout(
+                title='Training Progress',
+                xaxis_title='Epoch',
+                yaxis_title='Loss',
+                yaxis2=dict(
+                    title='Elo Rating',
+                    overlaying='y',
+                    side='right'
+                )
+            )
+            return fig
+
+        self.app.run_server()
+
 class TensorBoardLogger:
     def __init__(self):
-        self.writer = SummaryWriter(log_dir=Config.TENSORBOARD_LOG_DIR, comment=Config.TENSORBOARD_COMMENT)
+        self.writer = SummaryWriter(log_dir=Config.PLOTLY_LOG_DIR, comment=Config.TENSORBOARD_COMMENT)
 
     def log_metrics(self, metrics, epoch):
         for key, value in metrics.items():
@@ -137,102 +297,20 @@ class TensorBoardLogger:
     def close(self):
         self.writer.close()
 
-class AIPlayer:
-    def __init__(self, model_path=Config.MODEL_PATH, device=None, side=chess.WHITE):
-        self.device = device if device else get_device()
-        self.model = ChessNet(num_residual_blocks=Config.NUM_RESIDUAL_BLOCKS).to(self.device)
-        self.model_path = model_path
-        self.side = side
-        if os.path.exists(model_path):
-            load_model(self.model, model_path, self.device)
-            print("Loaded trained model.")
-        else:
-            print("Trained model not found. Using Stockfish as fallback.")
-            self.model = None
-            self.engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
+class EloRating:
+    def __init__(self, initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR):
+        self.rating = initial_elo
+        self.k = k_factor
 
-    def get_best_move(self, board):
-        if self.model and board.turn == self.side:
-            # Ensure the model is in evaluation mode
-            self.model.eval()
-            board_tensor = board_to_tensor(board).to(self.device)
-            with torch.no_grad():
-                policy, value = self.model(board_tensor.unsqueeze(0))  # Add batch dimension
-            move_probs = torch.exp(policy).cpu().numpy()[0]
-            top_move_indices = move_probs.argsort()[-10:][::-1]  # Top 10 moves
-            for move_index in top_move_indices:
-                move = index_to_move(move_index, board)
-                if move in board.legal_moves:
-                    return move
-            # Fallback to random move if no top move is legal
-            return random.choice(list(board.legal_moves))
-        elif hasattr(self, 'engine') and self.engine:
-            # Use Stockfish if AI model is not available or it's not AI's turn
-            result = self.engine.play(board, chess.engine.Limit(time=0.1))
-            return result.move
-        else:
-            # Fallback to random move
-            return random.choice(list(board.legal_moves))
-
-    def close(self):
-        if hasattr(self, 'engine') and self.engine:
-            self.engine.quit()
-
-class GameAnalyzer:
-    def __init__(self, engine_path, depth=3):
-        self.engine_path = engine_path
-        self.depth = depth
-        self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-
-    def analyze_game(self, board):
+    def update(self, opponent_rating, score):
         """
-        Analyzes the game by iterating through all moves and collecting evaluations.
-        Returns a list of tuples: (move, evaluation)
+        Updates the Elo rating based on the game result.
+        :param opponent_rating: Elo rating of the opponent
+        :param score: 1 for win, 0.5 for draw, 0 for loss
         """
-        analysis = []
-        temp_board = chess.Board()
-        for move in board.move_stack:
-            temp_board.push(move)
-            try:
-                info = self.engine.analyse(temp_board, chess.engine.Limit(depth=self.depth))
-                score = info["score"].white()
-                if score.is_mate():
-                    eval_score = 100000 if score.mate() > 0 else -100000
-                else:
-                    eval_score = score.score(mate_score=100000)
-                analysis.append((move, eval_score))
-            except Exception as e:
-                print(f"Error analyzing move {move}: {e}")
-                analysis.append((move, 0))  # Neutral evaluation in case of error
-        return analysis
-
-    def close(self):
-        self.engine.quit()
-
-class SaveLoad:
-    @staticmethod
-    def save_game(board, filename):
-        """
-        Saves the current game to a PGN file.
-        """
-        game = chess.pgn.Game.from_board(board)
-        with open(filename, 'a') as f:
-            exporter = chess.pgn.FileExporter(f)
-            game.accept(exporter)
-
-    @staticmethod
-    def load_game(filename):
-        """
-        Loads a game from a PGN file and returns a chess.Board object.
-        """
-        with open(filename, 'r') as f:
-            game = chess.pgn.read_game(f)
-        if game is None:
-            raise ValueError("No game found in the PGN file.")
-        board = game.board()
-        for move in game.mainline_moves():
-            board.push(move)
-        return board
+        expected_score = 1 / (1 + 10 ** ((opponent_rating - self.rating) / 400))
+        self.rating += self.k * (score - expected_score)
+        return self.rating
 
 class SoundEffects:
     def __init__(self):
@@ -259,20 +337,28 @@ class Theme:
         self.current_theme = "light"
 
     def apply_light_theme(self):
-        self.app.root.configure(bg="#F5F5F7")
+        # Update all relevant widgets
+        # Assuming self.app.ui_side_panel.move_list exists
+        self.app.ui_side_panel.move_list.configure(bg="#F0F0F0", fg="#333333")
+        self.app.ui_side_panel.captured_pieces_white.configure(bg="#FFFFFF", fg="#333333")
+        self.app.ui_side_panel.captured_pieces_black.configure(bg="#FFFFFF", fg="#333333")
+        self.app.ui_side_panel.timer_label.configure(bg="#FFFFFF", fg="#000000")
+        self.app.ui_side_panel.status_label.configure(bg="#FFFFFF", fg="#000000")
+        self.app.board_frame.configure(bg="#D6D6D6")
         self.app.side_panel_frame.configure(bg="#FFFFFF")
         self.app.status_bar.configure(bg="#F5F5F7", fg="#333333")
-        self.app.move_list.configure(bg="#F0F0F0", fg="#333333")
-        self.app.chess_board.configure(bg="#FFFFFF")
-        # Update other widgets' backgrounds and foregrounds as needed
+        # Similarly, configure other widgets if any
 
     def apply_dark_theme(self):
-        self.app.root.configure(bg="#2E2E2E")
-        self.app.side_panel_frame.configure(bg="#3C3F41")
+        self.app.ui_side_panel.move_list.configure(bg="#4D4D4D", fg="#FFFFFF")
+        self.app.ui_side_panel.captured_pieces_white.configure(bg="#303030", fg="#FFFFFF")
+        self.app.ui_side_panel.captured_pieces_black.configure(bg="#303030", fg="#FFFFFF")
+        self.app.ui_side_panel.timer_label.configure(bg="#303030", fg="#FFFFFF")
+        self.app.ui_side_panel.status_label.configure(bg="#303030", fg="#FFFFFF")
+        self.app.board_frame.configure(bg="#303030")
+        self.app.side_panel_frame.configure(bg="#303030")
         self.app.status_bar.configure(bg="#2E2E2E", fg="#FFFFFF")
-        self.app.move_list.configure(bg="#4D4D4D", fg="#FFFFFF")
-        self.app.chess_board.configure(bg="#000000")
-        # Update other widgets' backgrounds and foregrounds as needed
+        # Similarly, configure other widgets if any
 
     def toggle_theme(self):
         if self.current_theme == "light":
