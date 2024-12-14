@@ -1,4 +1,5 @@
 # main.py
+
 import tkinter as tk
 from chess_app.ui import ChessApp
 

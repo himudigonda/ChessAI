@@ -1,0 +1,7 @@
+torch==2.0.1
+torchvision==0.15.2
+torchaudio==2.0.2
+python-chess==1.999
+tqdm==4.65.0
+pygame==2.6.1
+matplotlib==3.7.1
