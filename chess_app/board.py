@@ -52,6 +52,7 @@ class ChessBoard(tk.Canvas):
     def on_canvas_resize(self, event):
         self.draw_chessboard()
         self.draw_pieces()
+
     def draw_chessboard(self):
         self.delete("all")  # Clear everything before redrawing
         canvas_width = self.winfo_width()
@@ -90,6 +91,7 @@ class ChessBoard(tk.Canvas):
                     )
                 else:
                     print(f"Warning: Image for piece {piece.symbol()} not found.")
+
     def highlight_square(self, square, color):
         row, col = 7 - square_rank(square), square_file(square)
         x1, y1 = col * self.square_size, row * self.square_size
@@ -97,7 +99,6 @@ class ChessBoard(tk.Canvas):
         self.create_rectangle(
             x1, y1, x2, y2, outline=color, width=3, tags="highlight"
         )
-# chess_app/board.py (continued)
 
     def on_click(self, event):
         if getattr(self, 'square_size', 0) == 0:
@@ -115,6 +116,11 @@ class ChessBoard(tk.Canvas):
             self.app.drag_start_coords = (event.x, event.y)
             # Hide the piece image temporarily
             self.itemconfigure(f"piece_{clicked_square}", state="hidden")
+
+    def on_drag(self, event):
+        if self.app.dragging_piece:
+            self.delete("drag")
+            self.create_image(event.x, event.y, image=self.app.dragging_piece, tags="drag", anchor=tk.CENTER)
 
     def on_drop(self, event):
         if self.app.dragging_piece:
@@ -153,35 +159,37 @@ class ChessBoard(tk.Canvas):
             self.draw_chessboard()
             self.draw_pieces()
 
-    def on_drag(self, event):
-        if self.app.dragging_piece:
-            self.delete("drag")
-            self.create_image(event.x, event.y, image=self.app.dragging_piece, tags="drag", anchor=tk.CENTER)
-
     def square_from_coords(self, col, row):
         return chess.square(col, 7 - row)
 
     def show_promotion_dialog(self):
         dialog = tk.Toplevel(self)
         dialog.title("Promote Pawn")
-        dialog.geometry("200x50")
+        dialog.geometry("300x80")
         dialog.transient(self)
         dialog.grab_set()
 
         pieces = ['Q', 'R', 'B', 'N']
         selected_piece = tk.StringVar(value='Q')
 
-        def choose_piece(piece):
-            selected_piece.set(piece)
-            dialog.destroy()
+        prompt_label = tk.Label(dialog, text="Choose promotion piece:", font=("Helvetica", 12))
+        prompt_label.pack(pady=5)
 
-        for i, piece in enumerate(pieces):
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=5)
+
+        for piece in pieces:
             btn = tk.Button(
-                dialog,
+                button_frame,
                 text=piece,
+                width=5,
                 command=lambda p=piece: choose_piece(p)
             )
             btn.pack(side=tk.LEFT, padx=5)
+
+        def choose_piece(piece):
+            selected_piece.set(piece)
+            dialog.destroy()
 
         self.wait_window(dialog)
         return selected_piece.get()

@@ -9,6 +9,11 @@ import chess.pgn
 from chess_app.board import ChessBoard
 from chess_app.utils import AIPlayer, GameAnalyzer, SaveLoad, SoundEffects, Theme, Timer
 import time
+# Import matplotlib modules
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class ChessApp:
     def __init__(self, root):
@@ -24,6 +29,8 @@ class ChessApp:
         self.legal_moves = []
         self.last_move = None
         self.pending_promotion = None
+        self.evaluation_history = []
+        self.move_numbers = []
 
         self.white_time = 300  # 5 minutes for white
         self.black_time = 300  # 5 minutes for black
@@ -43,6 +50,7 @@ class ChessApp:
         self.create_main_layout()
         self.create_chessboard()
         self.create_side_panel()
+        self.create_move_analysis_panel()  # New method for the graph
         self.create_status_bar()
         self.update_timer()
 
@@ -50,6 +58,86 @@ class ChessApp:
         self.theme.apply_light_theme()
 
         self.update_clock()
+
+    def create_move_analysis_panel(self):
+        """
+        Creates a panel with a matplotlib graph to display Stockfish's evaluations over moves.
+        """
+        # Frame for the graph
+        analysis_frame = tk.Frame(self.side_panel_frame, bg="#FFFFFF")
+        analysis_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+
+        # Label for the graph
+        graph_label = tk.Label(
+            analysis_frame,
+            text="Win Probability Graph",
+            font=("Helvetica", 14, "bold"),
+            bg="#FFFFFF",
+            fg="#000000",
+        )
+        graph_label.pack(pady=(0, 5))
+
+        # Create a matplotlib Figure
+        self.fig = Figure(figsize=(4, 3), dpi=100)
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_title("Stockfish Evaluation Over Moves")
+        self.ax.set_xlabel("Move Number")
+        self.ax.set_ylabel("Evaluation (Centipawns)")
+
+        # Create a FigureCanvasTkAgg widget
+        self.canvas = FigureCanvasTkAgg(self.fig, master=analysis_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def update_evaluation_graph(self):
+        """
+        Updates the matplotlib graph with the latest evaluation data.
+        """
+        self.ax.cla()  # Clear the previous plot
+        self.ax.set_title("Stockfish Evaluation Over Moves")
+        self.ax.set_xlabel("Move Number")
+        self.ax.set_ylabel("Evaluation (Centipawns)")
+
+        # Plot the evaluation history
+        self.ax.plot(self.move_numbers, self.evaluation_history, marker='o', linestyle='-')
+
+        # Add a horizontal line at 0 (equal position)
+        self.ax.axhline(0, color='gray', linestyle='--')
+
+        self.canvas.draw()
+
+    def handle_move(self, move, promotion=None):
+        # ... [existing handle_move code]
+
+        # After handling the move, fetch and store the evaluation
+        self.fetch_and_store_evaluation()
+
+        # Update the graph
+        self.update_evaluation_graph()
+
+    def execute_ai_move(self, ai_move):
+        # ... [existing execute_ai_move code]
+
+        # After handling the AI move, fetch and store the evaluation
+        self.fetch_and_store_evaluation()
+
+        # Update the graph
+        self.update_evaluation_graph()
+
+    def fetch_and_store_evaluation(self):
+        """
+        Fetches the current evaluation from Stockfish and stores it for graphing.
+        """
+        # Assuming AIPlayer has a method to get the current evaluation
+        # You may need to adjust this based on your AIPlayer implementation
+        try:
+            # Get the evaluation in centipawns
+            evaluation = self.ai_player.get_evaluation(self.board)
+            self.evaluation_history.append(evaluation)
+            self.move_numbers.append(len(self.move_numbers) + 1)
+        except Exception as e:
+            print(f"Error fetching evaluation: {e}")
+            # Handle cases where evaluation might not be available
 
     def create_main_layout(self):
         self.main_frame = ttk.Frame(self.root)
