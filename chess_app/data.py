@@ -9,9 +9,12 @@ def board_to_tensor(board):
     """
     Converts a chess.Board object to a 17x8x8 tensor.
     12 channels for piece types, 4 for castling rights, and 1 for en passant.
+
+    :param board: chess.Board object representing the current board state.
+    :return: PyTorch tensor of shape (17, 8, 8).
     """
     piece_map = board.piece_map()
-    tensor = np.zeros((17, 8, 8), dtype=np.float32)  # Increased to 17 channels
+    tensor = np.zeros((17, 8, 8), dtype=np.float32)  # 17 channels
 
     piece_dict = {
         'P': 0, 'N': 1, 'B': 2, 'R': 3, 'Q': 4, 'K': 5,
@@ -43,6 +46,9 @@ def move_to_index(move):
     """
     Encodes a move into a unique index.
     Simplistic encoding: from_square * 73 + to_square
+
+    :param move: chess.Move object to encode.
+    :return: Integer index representing the move.
     """
     return move.from_square * 73 + move.to_square
 
@@ -50,6 +56,10 @@ def index_to_move(index, board):
     """
     Decodes an index back to a chess.Move object.
     This is a simplified version and may need adjustments for promotions.
+
+    :param index: Integer index to decode.
+    :param board: Current chess.Board object.
+    :return: chess.Move object corresponding to the index.
     """
     from_square = index // 73
     to_square = index % 73
@@ -65,8 +75,18 @@ def index_to_move(index, board):
     return random.choice(list(board.legal_moves))
 
 class ChessDatasetTrain(torch.utils.data.Dataset):
+    """
+    PyTorch Dataset for training the ChessNet model.
+    Each data point consists of a board tensor, move index, outcome, and move quality.
+    """
+
     def __init__(self, data):
-        self.data = data  # List of tuples (board_tensor, move_index, outcome, move_quality)
+        """
+        Initializes the dataset with training data.
+
+        :param data: List of tuples (board_tensor, move_index, outcome, move_quality)
+        """
+        self.data = data
 
     def __len__(self):
         return len(self.data)

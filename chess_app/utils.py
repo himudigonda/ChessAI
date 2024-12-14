@@ -4,7 +4,7 @@ import torch
 import chess.engine
 import chess.pgn
 from chess_app.model import ChessNet, load_model, save_model
-from chess_app.data import board_to_tensor, move_to_index, index_to_move, ChessDatasetTrain
+from chess_app.data import board_to_tensor, move_to_index, index_to_move
 import torch.optim as optim
 import torch.nn as nn
 import random
@@ -25,6 +25,8 @@ import numpy as np
 def get_device():
     """
     Selects the best available device (CUDA or CPU).
+
+    :return: torch.device object representing the selected device.
     """
     if torch.cuda.is_available():
         print("Using CUDA device (NVIDIA GPU)")
@@ -34,7 +36,19 @@ def get_device():
         return torch.device("cpu")
 
 class AIPlayer:
+    """
+    AIPlayer handles the AI's move generation using a trained neural network model
+    or falls back to Stockfish if the model is not available.
+    """
+
     def __init__(self, model_path="chess_model.pth", device=None, side=chess.WHITE):
+        """
+        Initializes the AIPlayer.
+
+        :param model_path: Path to the trained model file.
+        :param device: Torch device to run the model on.
+        :param side: The side the AI is playing (chess.WHITE or chess.BLACK).
+        """
         self.device = device if device else get_device()
         self.model = ChessNet().to(self.device)
         self.model_path = model_path
@@ -45,9 +59,15 @@ class AIPlayer:
         else:
             print("Trained model not found. Using Stockfish as fallback.")
             self.model = None
-            self.engine = chess.engine.SimpleEngine.popen_uci("/path/to/stockfish")  # Update path
-    
+            self.engine = chess.engine.SimpleEngine.popen_uci("/path/to/stockfish")  # Update path accordingly
+
     def get_best_move(self, board):
+        """
+        Determines the best move for the AI to make based on the current board state.
+
+        :param board: chess.Board object representing the current game state.
+        :return: chess.Move object representing the selected move.
+        """
         if self.model and board.turn == self.side:
             # Ensure the model is in evaluation mode
             self.model.eval()
@@ -69,21 +89,36 @@ class AIPlayer:
         else:
             # Fallback to random move
             return random.choice(list(board.legal_moves))
-    
+
     def close(self):
+        """
+        Closes the AIPlayer's engine if it is using Stockfish.
+        """
         if hasattr(self, 'engine') and self.engine:
             self.engine.quit()
 
 class GameAnalyzer:
+    """
+    GameAnalyzer uses a chess engine to analyze a completed game move by move.
+    """
+
     def __init__(self, engine_path, depth=3):
+        """
+        Initializes the GameAnalyzer.
+
+        :param engine_path: Path to the chess engine executable (e.g., Stockfish).
+        :param depth: Search depth for the engine.
+        """
         self.engine_path = engine_path
         self.depth = depth
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-    
+
     def analyze_game(self, board):
         """
         Analyzes the game by iterating through all moves and collecting evaluations.
-        Returns a list of tuples: (move, evaluation)
+
+        :param board: chess.Board object representing the completed game.
+        :return: List of tuples (chess.Move, evaluation score).
         """
         analysis = []
         temp_board = chess.Board()
@@ -101,24 +136,39 @@ class GameAnalyzer:
                 print(f"Error analyzing move {move}: {e}")
                 analysis.append((move, 0))  # Neutral evaluation in case of error
         return analysis
-    
+
     def close(self):
+        """
+        Closes the chess engine.
+        """
         self.engine.quit()
 
 class SaveLoad:
+    """
+    SaveLoad provides static methods to save and load chess games in PGN format.
+    """
+
     @staticmethod
     def save_game(board, filename):
         """
         Saves the current game to a PGN file.
+
+        :param board: chess.Board object representing the game state.
+        :param filename: Path to the PGN file to save.
         """
         game = chess.pgn.Game.from_board(board)
         with open(filename, 'w') as f:
-            f.write(str(game))
-    
+            exporter = chess.pgn.FileExporter(f)
+            game.accept(exporter)
+
     @staticmethod
     def load_game(filename):
         """
         Loads a game from a PGN file and returns a chess.Board object.
+
+        :param filename: Path to the PGN file to load.
+        :return: chess.Board object representing the loaded game.
+        :raises ValueError: If no game is found in the PGN file.
         """
         with open(filename, 'r') as f:
             game = chess.pgn.read_game(f)
@@ -130,7 +180,14 @@ class SaveLoad:
         return board
 
 class GameSaver:
+    """
+    GameSaver handles the logic for saving games into organized directories and files.
+    """
+
     def __init__(self):
+        """
+        Initializes the GameSaver by setting up directories and tracking the current save location.
+        """
         self.save_dir = Config.SAVE_DIRECTORY
         self.games_per_file = Config.GAMES_PER_FILE
         self.files_per_folder = Config.FILES_PER_FOLDER
@@ -141,6 +198,9 @@ class GameSaver:
         self.initialize_directories()
 
     def initialize_directories(self):
+        """
+        Initializes the save directories and determines the next file to save to.
+        """
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
 
@@ -182,6 +242,11 @@ class GameSaver:
         self.games_in_current_file = 0
 
     def save_game(self, board):
+        """
+        Saves the game to the current PGN file. Rotates to a new file/folder if necessary.
+
+        :param board: chess.Board object representing the completed game.
+        """
         folder_path = os.path.join(self.save_dir, f"batch_{self.current_folder}")
         file_path = os.path.join(folder_path, f"games_{self.current_file}.pgn")
 
@@ -201,7 +266,6 @@ class GameSaver:
                 self.current_folder += 1
                 if self.current_folder > self.max_folders:
                     self.current_folder = 1  # Overwrite from first folder
-
 class Logger:
     def __init__(self):
         self.logger = logging.getLogger('ChessAI')

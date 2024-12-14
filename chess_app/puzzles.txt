@@ -1,2 +1,7 @@
+# chess_app/puzzles.txt
+
+# List of chess puzzles in FEN format.
+# Each line represents a different puzzle position.
+
 1rbqkbnr/pppppppp/2n5/8/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3
 rnbqkbnr/pppppppp/8/4P3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2

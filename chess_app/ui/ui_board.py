@@ -6,7 +6,20 @@ import chess
 from chess_app.data import board_to_tensor
 
 class ChessBoard(tk.Canvas):
+    """
+    ChessBoard is a Tkinter Canvas that displays the chessboard and pieces.
+    It handles user interactions for moving pieces via drag-and-drop.
+    """
+
     def __init__(self, parent, app, *args, **kwargs):
+        """
+        Initializes the ChessBoard UI component.
+
+        :param parent: The parent Tkinter widget.
+        :param app: The main ChessApp instance.
+        :param args: Additional positional arguments for Tkinter Canvas.
+        :param kwargs: Additional keyword arguments for Tkinter Canvas.
+        """
         super().__init__(parent, bg="#FFFFFF", highlightthickness=0, *args, **kwargs)
         self.app = app
         self.board = app.board
@@ -20,6 +33,9 @@ class ChessBoard(tk.Canvas):
         self.draw_pieces()
 
     def load_images(self):
+        """
+        Loads and resizes chess piece images from the assets folder.
+        """
         # Load and resize images based on initial square size
         self.piece_size = 60  # Initial size; will adjust on resize
         pieces = ['White_pawn', 'White_knight', 'White_bishop', 'White_rook', 'White_queen', 'White_king',
@@ -35,6 +51,11 @@ class ChessBoard(tk.Canvas):
                 self.images[piece] = None  # Placeholder
 
     def on_resize(self, event):
+        """
+        Handles the resize event by redrawing the chessboard and pieces.
+
+        :param event: The Tkinter event object.
+        """
         self.delete("all")  # Clear the canvas
         self.width = event.width
         self.height = event.height
@@ -43,6 +64,10 @@ class ChessBoard(tk.Canvas):
         self.draw_pieces()
 
     def draw_chessboard(self):
+        """
+        Draws the chessboard squares on the canvas.
+        Highlights the last move if available.
+        """
         # Default light theme colors
         colors = ["#EEEED2", "#769656"]
         for row in range(8):
@@ -60,6 +85,9 @@ class ChessBoard(tk.Canvas):
             self.highlight_square(to_square, "#E6B800")
 
     def draw_pieces(self):
+        """
+        Draws the chess pieces on the chessboard based on the current board state.
+        """
         for square, piece in self.board.piece_map().items():
             row = 7 - chess.square_rank(square)
             col = chess.square_file(square)
@@ -74,11 +102,19 @@ class ChessBoard(tk.Canvas):
                 )
 
     def bind_events(self):
+        """
+        Binds mouse events for piece interactions (drag-and-drop).
+        """
         self.bind("<Button-1>", self.on_click)
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<ButtonRelease-1>", self.on_drop)
 
     def on_click(self, event):
+        """
+        Handles the click event on a piece to start dragging.
+
+        :param event: The Tkinter event object.
+        """
         col = int(event.x // self.square_size)
         row = int(event.y // self.square_size)
         square = chess.square(col, 7 - row)
@@ -98,11 +134,21 @@ class ChessBoard(tk.Canvas):
                 self.drag_image = self.create_image(event.x, event.y, image=self.itemcget(self.dragging_piece_id, "image"), anchor=tk.CENTER)
 
     def on_drag(self, event):
+        """
+        Handles the drag motion by moving the drag image with the cursor.
+
+        :param event: The Tkinter event object.
+        """
         if self.dragging_piece_id and self.drag_image:
             # Move the drag image with the cursor
             self.coords(self.drag_image, event.x, event.y)
 
     def on_drop(self, event):
+        """
+        Handles the drop event by determining the target square and executing the move.
+
+        :param event: The Tkinter event object.
+        """
         if self.dragging_piece_id and self.drag_image:
             # Determine the square where the piece is dropped
             col = int(event.x // self.square_size)
@@ -121,6 +167,12 @@ class ChessBoard(tk.Canvas):
             self.delete("highlight")
 
     def highlight_square(self, square, color):
+        """
+        Highlights a specific square with the given color.
+
+        :param square: The square to highlight.
+        :param color: Color code for highlighting.
+        """
         row = 7 - chess.square_rank(square)
         col = chess.square_file(square)
         x1 = col * self.square_size
@@ -130,4 +182,7 @@ class ChessBoard(tk.Canvas):
         self.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags="highlight")
 
     def clear_highlights(self):
+        """
+        Clears all highlight overlays on the chessboard.
+        """
         self.delete("highlight")

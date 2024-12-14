@@ -7,19 +7,35 @@ from chess_app.model import ChessNet, load_model, save_model
 from chess_app.data import board_to_tensor, move_to_index, index_to_move
 import random
 import os
+from tqdm import tqdm  # For progress bars
 from chess_app.utils import get_device, Logger, TensorBoardLogger, EloRating, AIPlayer
 from chess_app.config import Config
 import json
 
 def evaluate_model(model_path, device, num_games=10, engine_path=Config.ENGINE_PATH, depth=2, logger=None, tensorboard_logger=None):
+    """
+    Evaluates the Chess AI model by playing against Stockfish.
+
+    :param model_path: Path to the trained model.
+    :param device: Torch device to run the model on.
+    :param num_games: Number of games to play for evaluation.
+    :param engine_path: Path to the Stockfish engine executable.
+    :param depth: Search depth for Stockfish.
+    :param logger: Logger instance for logging.
+    :param tensorboard_logger: TensorBoardLogger instance for logging to TensorBoard.
+    :return: Tuple (results dictionary, final Elo rating)
+    """
+    # Initialize AIPlayer with the model
     ai_player = AIPlayer(model_path=model_path, device=device, side=chess.WHITE)
+    # Initialize Stockfish engine
     engine = chess.engine.SimpleEngine.popen_uci(engine_path)
 
+    # Initialize Elo Rating
     elo_rating = EloRating(initial_elo=Config.INITIAL_ELO, k_factor=Config.K_FACTOR)
 
     results = {"AI_Wins": 0, "Stockfish_Wins": 0, "Draws": 0}
 
-    for game_num in range(num_games):
+    for game_num in tqdm(range(num_games), desc="Self-Play Games", disable=not logger):
         board = chess.Board()
         while not board.is_game_over():
             if board.turn == ai_player.side:
@@ -47,7 +63,8 @@ def evaluate_model(model_path, device, num_games=10, engine_path=Config.ENGINE_P
 
         # Log the outcome
         if logger:
-            logger.info(f"Game {game_num + 1}/{num_games} completed. Outcome: {outcome_val}. ELO: {elo_rating.rating:.0f}")
+            elo = elo_rating.rating if elo_rating else "N/A"
+            logger.info(f"Game {game_num + 1}/{num_games} completed. Outcome: {outcome_val}. ELO: {elo}")
 
         # Log to TensorBoard
         if tensorboard_logger:
@@ -55,13 +72,16 @@ def evaluate_model(model_path, device, num_games=10, engine_path=Config.ENGINE_P
                 'Evaluation/Game_Result': outcome_val,
                 'Evaluation/Elo': elo_rating.rating
             }
-            tensorboard_logger.log_metrics(metrics, epoch=0)  # Epoch can be modified as needed
+            tensorboard_logger.log_metrics(metrics, epoch=game_num)  # Use game_num as epoch for uniqueness
 
     engine.quit()
     ai_player.close()
     return results, elo_rating.rating
 
 def main():
+    """
+    Main function to run the evaluation of the Chess AI model.
+    """
     config = Config()
 
     # Ensure log directory exists
@@ -107,7 +127,7 @@ def main():
             'Evaluation/Draws': results['Draws'],
             'Evaluation/Final_Elo': final_elo
         }
-        tensorboard_logger.log_metrics(metrics, epoch=0)
+        tensorboard_logger.log_metrics(metrics, epoch=num_games)
 
     tensorboard_logger.close()
 

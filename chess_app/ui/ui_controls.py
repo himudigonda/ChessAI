@@ -1,16 +1,31 @@
-# chess_app/ui_controls.py
+# chess_app/ui/ui_controls.py
 
 import tkinter as tk
 from tkinter import ttk
 from chess_app.config import Config
 
 class UIControls(ttk.Frame):
+    """
+    UIControls is a Tkinter Frame that contains various control widgets such as AI difficulty settings,
+    sound toggle, and action buttons like Show Hint, Analyze Position, etc.
+    """
     def __init__(self, app, parent, *args, **kwargs):
+        """
+        Initializes the UIControls frame.
+
+        :param app: The main ChessApp instance.
+        :param parent: The parent Tkinter widget.
+        :param args: Additional positional arguments for Tkinter Frame.
+        :param kwargs: Additional keyword arguments for Tkinter Frame.
+        """
         super().__init__(parent, *args, **kwargs)
         self.app = app
         self.create_controls()
 
     def create_controls(self):
+        """
+        Creates and packs all control widgets within the frame.
+        """
         controls = self
 
         # AI Difficulty
@@ -29,7 +44,7 @@ class UIControls(ttk.Frame):
             controls,
             text="Sound Effects",
             variable=self.sound_toggle_var,
-            command=self.toggle_sound
+            command=self.app.toggle_sound
         )
         self.sound_toggle.pack(pady=5, anchor="w")
 
@@ -74,6 +89,11 @@ class UIControls(ttk.Frame):
         self.theme_button.pack(pady=10, fill=tk.X)
 
     def set_ai_difficulty(self, event):
+        """
+        Sets the AI difficulty based on user selection.
+
+        :param event: The Tkinter event object.
+        """
         selected_depth = int(self.difficulty_var.get())
         if self.app.ai_player.engine:
             self.app.ai_player.engine.configure({"Skill Level": selected_depth})
@@ -81,5 +101,8 @@ class UIControls(ttk.Frame):
         self.app.update_status_bar(f"AI difficulty set to level {selected_depth}")
 
     def toggle_sound(self):
+        """
+        Toggles the sound effects on or off.
+        """
         self.app.sound_enabled = self.sound_toggle_var.get()
-        self.app.update_status_bar(f"Sound Effects {'Enabled' if self.app.sound_enabled else 'Disabled'}")
+        self.app.update_status_bar(f"Sound Effects {'Enabled' if self.sound_enabled else 'Disabled'}")

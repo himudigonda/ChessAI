@@ -3,3 +3,5 @@
 tensorboard_logs/**
 logs/**
 plotly_logs/**
+chess_app/.ui.py.bak
+

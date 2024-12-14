@@ -5,7 +5,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ResidualBlock(nn.Module):
+    """
+    Defines a Residual Block for the neural network.
+    Consists of two convolutional layers with a skip connection.
+    """
+
     def __init__(self, channels):
+        """
+        Initializes the ResidualBlock.
+
+        :param channels: Number of input and output channels.
+        """
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
@@ -13,6 +23,12 @@ class ResidualBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(channels)
 
     def forward(self, x):
+        """
+        Forward pass through the residual block.
+
+        :param x: Input tensor.
+        :return: Output tensor after residual connection.
+        """
         residual = x
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
@@ -21,7 +37,19 @@ class ResidualBlock(nn.Module):
         return out
 
 class ChessNet(nn.Module):
+    """
+    Neural network model for the Chess AI.
+    Consists of convolutional layers, residual blocks, and separate heads for policy and value.
+    """
+
     def __init__(self, board_size=8, num_channels=17, num_residual_blocks=256):
+        """
+        Initializes the ChessNet model.
+
+        :param board_size: Size of the chessboard (default 8 for 8x8).
+        :param num_channels: Number of channels in the input tensor.
+        :param num_residual_blocks: Number of residual blocks in the model.
+        """
         super(ChessNet, self).__init__()
         self.board_size = board_size
         self.num_channels = num_channels
@@ -54,6 +82,12 @@ class ChessNet(nn.Module):
         self.dropout = nn.Dropout(p=0.3)
 
     def forward(self, x):
+        """
+        Forward pass through the ChessNet model.
+
+        :param x: Input tensor of shape (batch_size, num_channels, board_size, board_size).
+        :return: Tuple (policy_logits, value).
+        """
         x = self.relu(self.bn1(self.conv1(x)))
         x = self.residual_blocks(x)
 
@@ -83,7 +117,10 @@ class ChessNet(nn.Module):
 
     def predict_move_quality(self, x):
         """
-        Predicts the quality of the move: Great, Good, Average, Bad, Blunder
+        Predicts the quality of the move: Great, Good, Average, Bad, Blunder.
+
+        :param x: Input tensor of the current board state.
+        :return: String representing the move quality.
         """
         # Placeholder implementation
         # In practice, this should be trained with labeled data
@@ -102,7 +139,13 @@ class ChessNet(nn.Module):
             return "Blunder"
 
 def load_model(model, path, device):
-    """Load model with proper device handling"""
+    """
+    Load model weights from a file and move to the specified device.
+
+    :param model: The neural network model to load weights into.
+    :param path: Path to the saved model file.
+    :param device: The device to move the model to.
+    """
     state_dict = torch.load(path, map_location=device)
     model.load_state_dict(state_dict)
     model.to(device)
@@ -110,7 +153,12 @@ def load_model(model, path, device):
     print(f"Model loaded from {path}")
 
 def save_model(model, path):
-    """Save model to CPU for better compatibility"""
+    """
+    Save the model's state dictionary to a file.
+
+    :param model: The neural network model to save.
+    :param path: Path to save the model file.
+    """
     model.cpu()
     torch.save(model.state_dict(), path)
     print(f"Model saved to {path}")
