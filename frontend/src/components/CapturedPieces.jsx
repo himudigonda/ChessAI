@@ -36,7 +36,7 @@ const CapturedPieces = ({ capturedWhite, capturedBlack }) => {
           {capturedWhite.map((piece, index) => (
             <img
               key={index}
-              src={`/assets/images/${piece}.png`}
+              src={`/frontend/public/assets/images/${piece}.png`}
               alt={piece}
               className={classes.pieceImage}
             />
@@ -49,7 +49,7 @@ const CapturedPieces = ({ capturedWhite, capturedBlack }) => {
           {capturedBlack.map((piece, index) => (
             <img
               key={index}
-              src={`/assets/images/${piece}.png`}
+              src={`/frontend/public/assets/images/${piece}.png`}
               alt={piece}
               className={classes.pieceImage}
             />

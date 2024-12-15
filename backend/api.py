@@ -58,34 +58,30 @@ def start_game(mode):
     ai_player = None
     opponent_ai = None
 
-    if mode == 'user_vs_stockfish':
+    if mode == "user_vs_stockfish":
         print(f"[{timestamp}] Initializing against stockfish")
         ai_player = AIPlayer(
             model_path=None,
             device=get_device(),
             side=chess.BLACK,
-            engine_path = engine_path
+            engine_path=engine_path,
         )
-    elif mode == 'user_vs_cai':
-      print(f"[{timestamp}] Initializing against cAI")
-      ai_player = AIPlayer(
-          model_path=Config.MODEL_PATH,
+    elif mode == "user_vs_cai":
+        print(f"[{timestamp}] Initializing against cAI")
+        ai_player = AIPlayer(
+            model_path=Config.MODEL_PATH, device=get_device(), side=chess.BLACK
+        )
+    elif mode == "watch_cai_vs_stockfish":
+        print(f"[{timestamp}] Initializing cAI vs stockfish")
+        ai_player = AIPlayer(
+            model_path=Config.MODEL_PATH, device=get_device(), side=chess.WHITE
+        )
+        opponent_ai = AIPlayer(
+            model_path=None,
             device=get_device(),
-            side=chess.BLACK
+            side=chess.BLACK,
+            engine_path=engine_path,
         )
-    elif mode == 'watch_cai_vs_stockfish':
-      print(f"[{timestamp}] Initializing cAI vs stockfish")
-      ai_player = AIPlayer(
-        model_path=Config.MODEL_PATH,
-        device=get_device(),
-        side=chess.WHITE
-      )
-      opponent_ai = AIPlayer(
-        model_path = None,
-        device = get_device(),
-        side=chess.BLACK,
-        engine_path= engine_path
-      )
 
     return jsonify({"message": "Game started", "mode": mode})
 
@@ -144,15 +140,15 @@ def make_move():
             }
             temp_board = chess.Board()
             for move_in_stack in current_board.move_stack:
-              if temp_board.is_capture(move_in_stack):
-                captured_piece = temp_board.piece_at(move_in_stack.to_square)
-                if captured_piece:
-                    symbol = captured_piece.symbol()
-                    if captured_piece.color == chess.WHITE:
-                        captured_pieces["white"].append(symbol.upper())
-                    else:
-                        captured_pieces["black"].append(symbol.lower())
-              temp_board.push(move_in_stack)
+                if temp_board.is_capture(move_in_stack):
+                    captured_piece = temp_board.piece_at(move_in_stack.to_square)
+                    if captured_piece:
+                        symbol = captured_piece.symbol()
+                        if captured_piece.color == chess.WHITE:
+                            captured_pieces["white"].append(symbol.upper())
+                        else:
+                            captured_pieces["black"].append(symbol.lower())
+                temp_board.push(move_in_stack)
 
             return jsonify(
                 {
@@ -160,7 +156,7 @@ def make_move():
                     "legalMoves": get_legal_moves(current_board),
                     "moves": get_moves_san(current_board),
                     "gameOver": False,
-                    "capturedPieces": captured_pieces
+                    "capturedPieces": captured_pieces,
                 }
             )
         else:
@@ -176,6 +172,8 @@ def make_move():
         print(f"[{timestamp}] Error making move: {e}")
         traceback.print_exc()
         return jsonify({"error": "Error making move"}), 500
+
+
 @app.route("/api/undo_move", methods=["POST"])
 @cross_origin()
 def undo_move():
@@ -199,22 +197,24 @@ def undo_move():
             traceback.print_exc()
             return jsonify({"error": "Error undoing move"}), 500
     else:
-      print(f"[{timestamp}] No moves to undo.")
-      return jsonify({"error":"No moves to undo."}),400
+        print(f"[{timestamp}] No moves to undo.")
+        return jsonify({"error": "No moves to undo."}), 400
+
 
 @app.route("/api/redo_move", methods=["POST"])
 @cross_origin()
 def redo_move():
-  global current_board
-  timestamp = time.time()
-  print(f"[{timestamp}] Redoing move")
-  try:
-      # We cannot redo without a way to track moves.
-      return jsonify({"error": "Redo move is not yet implemented."}), 400
-  except Exception as e:
-      print(f"[{timestamp}] Error redoing move: {e}")
-      traceback.print_exc()
-      return jsonify({"error": "Error redoing move"}), 500
+    global current_board
+    timestamp = time.time()
+    print(f"[{timestamp}] Redoing move")
+    try:
+        # We cannot redo without a way to track moves.
+        return jsonify({"error": "Redo move is not yet implemented."}), 400
+    except Exception as e:
+        print(f"[{timestamp}] Error redoing move: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Error redoing move"}), 500
+
 
 @app.route("/api/validate_move", methods=["POST"])
 @cross_origin()
@@ -286,16 +286,15 @@ def ai_move():
             }
             temp_board = chess.Board()
             for move_in_stack in current_board.move_stack:
-              if temp_board.is_capture(move_in_stack):
-                captured_piece = temp_board.piece_at(move_in_stack.to_square)
-                if captured_piece:
-                    symbol = captured_piece.symbol()
-                    if captured_piece.color == chess.WHITE:
-                        captured_pieces["white"].append(symbol.upper())
-                    else:
-                        captured_pieces["black"].append(symbol.lower())
-              temp_board.push(move_in_stack)
-
+                if temp_board.is_capture(move_in_stack):
+                    captured_piece = temp_board.piece_at(move_in_stack.to_square)
+                    if captured_piece:
+                        symbol = captured_piece.symbol()
+                        if captured_piece.color == chess.WHITE:
+                            captured_pieces["white"].append(symbol.upper())
+                        else:
+                            captured_pieces["black"].append(symbol.lower())
+                temp_board.push(move_in_stack)
 
             return jsonify(
                 {
@@ -303,7 +302,7 @@ def ai_move():
                     "legalMoves": get_legal_moves(current_board),
                     "moves": get_moves_san(current_board),
                     "gameOver": False,
-                    "capturedPieces": captured_pieces
+                    "capturedPieces": captured_pieces,
                 }
             )
         else:
@@ -313,6 +312,8 @@ def ai_move():
         print(f"[{timestamp}] Error in AI move: {e}")
         traceback.print_exc()
         return jsonify({"error": "Error in AI move"}), 500
+
+
 @app.route("/api/save_game", methods=["POST"])
 @cross_origin()
 def save_game():
@@ -325,15 +326,20 @@ def save_game():
         if fen:
             board = chess.Board(fen)
             from chess_app.utils import SaveLoad
+
             SaveLoad.save_game(board, "saved_game.pgn")
             print(f"[{timestamp}] Game saved successfully")
             return jsonify({"success": True, "message": "Game Saved Successfully"})
         else:
-          return jsonify({"success":False, "message":"Failed to save: no fen found"}),400
+            return (
+                jsonify({"success": False, "message": "Failed to save: no fen found"}),
+                400,
+            )
     except Exception as e:
         print(f"[{timestamp}] Error saving game: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Error saving game: {e}"}), 500
+
 
 @app.route("/api/load_game", methods=["GET"])
 @cross_origin()
@@ -343,15 +349,23 @@ def load_game():
     print(f"[{timestamp}] Loading game")
     try:
         from chess_app.utils import SaveLoad
+
         board = SaveLoad.load_game("saved_game.pgn")
         current_board = board
         print(f"[{timestamp}] Game loaded successfully")
-        return jsonify({"success": True, "fen": board_to_fen(current_board),
-                       "moves":get_moves_san(current_board), "message": "Game Loaded Successfully"})
+        return jsonify(
+            {
+                "success": True,
+                "fen": board_to_fen(current_board),
+                "moves": get_moves_san(current_board),
+                "message": "Game Loaded Successfully",
+            }
+        )
     except Exception as e:
         print(f"[{timestamp}] Error loading game: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Error loading game: {e}"}), 500
+
 
 @app.route("/api/resign_game", methods=["POST"])
 @cross_origin()
@@ -367,6 +381,8 @@ def resign_game():
         print(f"[{timestamp}] Error resigning game: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Error resigning game: {e}"}), 500
+
+
 @app.route("/api/offer_draw", methods=["POST"])
 @cross_origin()
 def offer_draw():

@@ -59,10 +59,10 @@ const Square = ({
     isLight,
     children,
     onClick,
-    isSelected,
+    isSelected = false,  // Default parameter instead of defaultProps
     onDrop,
-    coordinate,
-    showCoordinates
+    coordinate = '',     // Default parameter instead of defaultProps
+    showCoordinates = false  // Default parameter instead of defaultProps
 }) => {
     const classes = useStyles();
 

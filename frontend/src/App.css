@@ -3,12 +3,20 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Roboto', sans-serif;
-  background-color: #fafafa;
+  background: linear-gradient(45deg, #e6f7ff 30%, #ccebff 90%);
 }
 
 .App {
   text-align: center;
   padding: 20px;
+}
+
+.chessboard {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #333;
+  width: fit-content;
+  margin: auto;
 }
 
 .boardContainer .lightSquare {

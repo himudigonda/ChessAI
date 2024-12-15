@@ -8,7 +8,7 @@ const api = axios.create({
     },
 });
 
-axios.defaults.baseURL = 'http://localhost:6009';
+axios.defaults.baseURL = 'http://127.0.0.1:6009';
 
 // In src/services/api.js or at the top of App.jsx
 axios.interceptors.request.use(request => {
