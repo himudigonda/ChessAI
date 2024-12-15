@@ -1,5 +1,3 @@
-# backend/api.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS, cross_origin
 import chess
@@ -20,106 +18,58 @@ opponent_ai = None
 
 
 def initialize_ai():
-    global ai_player
-    timestamp = time.time()
-    print(f"[{timestamp}] Initializing AI player")
-    try:
-        if not Config.MODEL_PATH or not os.path.exists(Config.MODEL_PATH):
-            ai_player = AIPlayer(device=get_device(), side=chess.WHITE)
-        else:
-            ai_player = AIPlayer(
-                model_path=Config.MODEL_PATH, device=get_device(), side=chess.WHITE
-            )
-    except Exception as e:
-        print(
-            f"[{timestamp}] Error initializing AI player, falling back to stockfish: {e}"
-        )
-        traceback.print_exc()
-        ai_player = AIPlayer(device=get_device(), side=chess.WHITE)
+    # Initialize AI players
+    pass
 
 
 initialize_ai()
 
 
 def board_to_fen(board):
-    timestamp = time.time()
-    print(f"[{timestamp}] Converting board to FEN")
-    try:
-        return board.fen()
-    except Exception as e:
-        print(f"[{timestamp}] Error converting board to FEN: {e}")
-        traceback.print_exc()
-        return None
+    return board.fen()
 
 
 def get_legal_moves(board):
-    timestamp = time.time()
-    print(f"[{timestamp}] Getting legal moves")
-    try:
-        return [move.uci() for move in board.legal_moves]
-    except Exception as e:
-        print(f"[{timestamp}] Error getting legal moves: {e}")
-        traceback.print_exc()
-        return []
+    return [move.uci() for move in board.legal_moves]
 
 
 def get_moves_san(board):
-    try:
-        return [board.san(move) for move in board.move_stack]
-    except Exception as e:
-        print(f"Error getting move san: {e}")
-        traceback.print_exc()
-        return []
+    san_moves = []
+    temp_board = chess.Board()
+    for move in board.move_stack:
+        try:
+            san = temp_board.san(move)
+            san_moves.append(san)
+            temp_board.push(move)
+        except Exception as e:
+            print(f"Error generating SAN for move {move}: {e}")
+            san_moves.append("Invalid Move")
+    return san_moves
 
 
 @app.route("/api/start_game/<mode>", methods=["POST"])
 @cross_origin()
 def start_game(mode):
-    global current_board, opponent_ai
+    global current_board, ai_player, opponent_ai
     timestamp = time.time()
-    print(f"[{timestamp}] Starting new game in mode: {mode}")
-    try:
-        current_board = chess.Board()
-        if mode == "vs_cai":
-            opponent_ai = AIPlayer(
-                model_path=Config.MODEL_PATH, device=get_device(), side=chess.BLACK
-            )
-        elif mode == "sf_vs_cai":
-            opponent_ai = AIPlayer(
-                model_path=Config.MODEL_PATH, device=get_device(), side=chess.BLACK
-            )
-        else:
-            opponent_ai = None
-        return jsonify(
-            {
-                "fen": board_to_fen(current_board),
-                "legalMoves": get_legal_moves(current_board),
-                "moves": get_moves_san(current_board),
-            }
-        )
-    except Exception as e:
-        print(f"[{timestamp}] Error starting new game: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"Error starting new game in mode {mode}: {e}"}), 500
+    print(f"[{timestamp}] Starting game in mode: {mode}")
+    current_board.reset()
+    # Initialize AI players based on mode
+    return jsonify({"message": "Game started", "mode": mode})
 
 
 @app.route("/api/get_board", methods=["GET"])
 @cross_origin()
 def get_board():
-    timestamp = time.time()
-    print(f"[{timestamp}] Fetching board state")
-    try:
-        return jsonify(
-            {
-                "fen": board_to_fen(current_board),
-                "legalMoves": get_legal_moves(current_board),
-                "moves": get_moves_san(current_board),
-            }
-        )
-    except Exception as e:
-        print(f"[{timestamp}] Error fetching board state: {e}")
-        traceback.print_exc()
-        return jsonify({"error": "Error fetching board state"}), 500
+    global current_board
+    return jsonify(
+        {
+            "fen": board_to_fen(current_board),
+            "legalMoves": get_legal_moves(current_board),
+            "moves": get_moves_san(current_board),
+            "gameOver": current_board.is_game_over(),
+        }
+    )
 
 
 @app.route("/api/make_move", methods=["POST"])
@@ -165,7 +115,8 @@ def make_move():
                 }
             )
         else:
-            print(f"[{timestamp}] Invalid move attempted")
+            print(f"[{timestamp}] Invalid move attempted: {move_uci}")
+            print(f"Current board FEN: {current_board.fen()}")
             return jsonify({"error": "Invalid move"}), 400
 
     except ValueError as e:
@@ -220,6 +171,7 @@ def ai_move():
         elif ai_player and current_board.turn == ai_player.side:
             move = ai_player.get_best_move(current_board)
         else:
+            print(f"[{timestamp}] Error No AI to make a move")
             return jsonify({"error": "No AI to make move"}), 400
 
         if move:
@@ -261,4 +213,4 @@ def ai_move():
 
 if __name__ == "__main__":
     print("Starting Flask server")
-    app.run(debug=True, port=6009)
+    app.run(debug=True, port=6009, host="0.0.0.0")
