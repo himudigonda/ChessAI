@@ -20,12 +20,12 @@ class Config:
     NUM_RESIDUAL_BLOCKS = 256
     TENSORBOARD_COMMENT = "Chess AI Training"
     DEPTH = 3
-    BATCH_SIZE = 512
+    BATCH_SIZE = 64
     LEARNING_RATE = 3e-4
-    NUM_GAMES_EVAL = 3
-    NUM_ITERATIONS = 3
-    NUM_GAMES_PER_ITERATION = 10
-    EPOCHS = 3
+    NUM_GAMES_EVAL = 10
+    NUM_ITERATIONS = 5
+    NUM_GAMES_PER_ITERATION = 100
+    EPOCHS = 10
 
     LIGHT_THEME = {
         "background": "#F5F5F5",
