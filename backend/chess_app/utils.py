@@ -32,19 +32,26 @@ def get_device():
 
 
 class AIPlayer:
-    def __init__(self, model_path="chess_model.pth", device=None, side=chess.WHITE):
+    def __init__(
+        self,
+        model_path="chess_model.pth",
+        device=None,
+        side=chess.WHITE,
+        engine_path=Config.ENGINE_PATH,
+    ):
         self.device = device if device else get_device()
         self.model = ChessNet().to(self.device)
         self.model_path = model_path
         self.side = side
+        self.engine_path = engine_path
 
-        if os.path.exists(model_path):
+        if model_path and os.path.exists(model_path):
             load_model(self.model, model_path, self.device)
             print("Loaded trained model.")
             self.engine = None
         else:
             print("Trained model not found. Using Stockfish as fallback.")
-            self.engine = chess.engine.SimpleEngine.popen_uci(Config.ENGINE_PATH)
+            self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
 
         self.difficulty_level = 2
 
@@ -66,18 +73,14 @@ class AIPlayer:
                 if move in board.legal_moves:
                     return move
             return random.choice(list(board.legal_moves))
-        elif self.engine and board.turn != self.side:
+        elif self.engine and board.turn == self.side:
             # Opponent is Stockfish
             result = self.engine.play(
                 board, chess.engine.Limit(depth=self.difficulty_level)
             )
             return result.move
-        elif (
-            self.engine
-            and board.turn == self.side
-            and (not self.model_path or not os.path.exists(self.model_path))
-        ):
-            # Using Stockfish if no model
+        elif self.engine and board.turn != self.side:
+            # Opponent is Stockfish
             result = self.engine.play(
                 board, chess.engine.Limit(depth=self.difficulty_level)
             )

@@ -9,6 +9,7 @@ import MoveList from './components/MoveList';
 import axios from './services/api';
 import './App.css';
 
+
 function App() {
   const [gameMode, setGameMode] = useState('user_vs_user');
   const [statusMessage, setStatusMessage] = useState('Welcome to ChessAI!');
@@ -19,28 +20,75 @@ function App() {
   const [fen, setFen] = useState('start');
   const [history, setHistory] = useState([]);
 
+  // In App.jsx, enhance the handleMove function
   const handleMove = async (sourceSquare, targetSquare) => {
-    const move = `${sourceSquare}${targetSquare}`;
-    console.log(`Attempting move: ${move}`);
+    console.log('=== handleMove Start ===');
+    console.log('Source Square:', sourceSquare, 'Type:', typeof sourceSquare);
+    console.log('Target Square:', targetSquare, 'Type:', typeof targetSquare);
+
+    const move = sourceSquare + targetSquare;
+    console.log('Formatted Move:', move, 'Type:', typeof move);
+
     try {
-      const response = await axios.post(`/api/make_move`, { move });
-      console.log('Move response:', response.data);
+      console.log('Making API request to:', `${axios.defaults.baseURL}/api/make_move`);
+      console.log('Request payload:', { move });
+
+      const response = await axios.post('/api/make_move', { move });
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data
+      });
+
       if (response.data.isCapture) {
+        console.log('Capture detected, playing sound');
         const captureSound = new Audio('/assets/sounds/capture.mp3');
-        captureSound.play();
+        captureSound.play().catch(err => console.error('Sound play error:', err));
       }
+
       if (response.data.error) {
         console.error('Move error:', response.data.error);
+        console.error('Full error response:', response.data);
         alert(response.data.error);
         return false;
       }
+
+      console.log('Setting new board state:', {
+        fen: response.data.fen,
+        moves: response.data.moves,
+        capturedWhite: response.data.capturedPieces?.white,
+        capturedBlack: response.data.capturedPieces?.black
+      });
+
       setFen(response.data.fen);
-      setHistory((prevHistory) => [...prevHistory, response.data.moves]);
-      setCapturedWhite(response.data.capturedPieces.white || []);
-      setCapturedBlack(response.data.capturedPieces.black || []);
+      setHistory((prevHistory) => {
+        console.log('Previous history:', prevHistory);
+        const newHistory = [...prevHistory, response.data.moves];
+        console.log('New history:', newHistory);
+        return newHistory;
+      });
+      setCapturedWhite(response.data.capturedPieces?.white || []);
+      setCapturedBlack(response.data.capturedPieces?.black || []);
+
+      console.log('=== handleMove Success ===');
       return true;
+
     } catch (error) {
-      console.error('Error making move:', error);
+      console.error('=== handleMove Error ===');
+      console.error('Error type:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('Request made but no response received');
+        console.error('Request details:', error.request);
+      }
+      console.error('Error config:', error.config);
+
       alert('An error occurred while making the move.');
       return false;
     }
@@ -189,6 +237,11 @@ function App() {
             setFen={(newFen) => {
               console.log('Setting FEN:', newFen);
               setFen(newFen);
+            }}
+            onStatusChange={(message, color) => {
+              console.log('Status change:', message, color);
+              setStatusMessage(message);
+              setStatusColor(color);
             }}
           />
         </Grid>
